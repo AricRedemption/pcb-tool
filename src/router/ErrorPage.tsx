@@ -1,9 +1,18 @@
 // src/pages/ErrorPage.tsx
-import { useRouteError, useNavigate } from "react-router-dom";
+import { useRouteError, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import type { CSSProperties } from 'react';
+
+type RouteErrorShape = {
+  statusText?: string;
+  message?: string;
+  stack?: string;
+};
 
 export default function ErrorPage() {
-  const error = useRouteError() as any; // 类型可以更具体
+  const rawError = useRouteError();
+  const error: RouteErrorShape =
+    typeof rawError === 'object' && rawError ? (rawError as RouteErrorShape) : {};
   const navigate = useNavigate();
   console.error(error);
 
@@ -16,7 +25,7 @@ export default function ErrorPage() {
       window.parent.postMessage({
         type: 'chux:error',
         error: {
-          message: error.message || error.statusText,
+          message: error.message || error.statusText || 'Unknown error',
           stack: error.stack,
         },
       }, 'https://www.coze.cn');
@@ -27,20 +36,20 @@ export default function ErrorPage() {
     navigate(-1);
   };
 
-  const containerStyle: React.CSSProperties = {
+  const containerStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, \'Noto Sans\', sans-serif, \'Apple Color Emoji\', \'Segoe UI Emoji\', \'Segoe UI Symbol\', \'Noto Color Emoji\'',
     background: 'linear-gradient(180deg, #f3f5ff 0%, #ffffff 100%)',
     color: '#2d3748',
     textAlign: 'center',
     padding: '1rem',
   };
 
-  const headingStyle: React.CSSProperties = {
+  const headingStyle: CSSProperties = {
     fontSize: '8rem',
     fontWeight: '900',
     margin: '0',
@@ -48,7 +57,7 @@ export default function ErrorPage() {
     textShadow: '0 4px 8px rgba(0,0,0,0.05)',
   };
 
-  const textStyle: React.CSSProperties = {
+  const textStyle: CSSProperties = {
     fontSize: '1.5rem',
     fontWeight: '500',
     marginTop: '-1rem',
@@ -56,14 +65,14 @@ export default function ErrorPage() {
     color: '#4a5568',
   };
 
-  const subTextStyle: React.CSSProperties = {
+  const subTextStyle: CSSProperties = {
     fontSize: '1rem',
     color: '#718096',
     marginBottom: '2rem',
     maxWidth: '400px',
   };
 
-  const buttonStyle: React.CSSProperties = {
+  const buttonStyle: CSSProperties = {
     padding: '12px 24px',
     fontSize: '1rem',
     fontWeight: '600',
@@ -82,7 +91,7 @@ export default function ErrorPage() {
       <h1 style={headingStyle}>出错了!</h1>
       <p style={textStyle}>抱歉，发生了错误，页面无法显示。</p>
       <p style={subTextStyle}>
-        {error.statusText || error.message}
+        {error.statusText || error.message || '未知错误'}
       </p>
       <button onClick={goBack} style={buttonStyle}>
         返回上一页

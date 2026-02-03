@@ -1,7 +1,12 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import AppShell from '../../components/AppShell';
+import { MODULE_CATALOG } from '../../domain/moduleCatalog';
+import { Project } from '../../domain/project';
+import { Workflow, WorkflowNode, createId, getModuleById } from '../../domain/workflow';
+import { getProjectById, listProjects, upsertProjectFromCreateInput } from '../../lib/projectsStore';
 import styles from './styles.module.css';
 
 interface Component {
@@ -22,6 +27,10 @@ type SortField = 'model' | 'type' | 'manufacturer' | 'package' | 'price';
 type SortOrder = 'asc' | 'desc';
 
 const ComponentDatabase: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectIdFromQuery = searchParams.get('projectId') ?? undefined;
+
   // 模拟元器件数据
   const mockComponents: Component[] = [
     {
@@ -228,16 +237,19 @@ const ComponentDatabase: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [filteredComponents, setFilteredComponents] = useState<Component[]>([...mockComponents]);
-  const [sortField, setSortField] = useState<SortField>('');
+  const [sortField, setSortField] = useState<SortField | ''>('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [componentSearch, setComponentSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [manufacturerFilter, setManufacturerFilter] = useState('');
   const [packageFilter, setPackageFilter] = useState('');
+  const [componentSearch, setComponentSearch] = useState('');
   const [selectedComponents, setSelectedComponents] = useState<Set<string>>(new Set());
   const [showComponentModal, setShowComponentModal] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null);
-  const [globalSearch, setGlobalSearch] = useState('');
+  const [showProjectSelectModal, setShowProjectSelectModal] = useState(false);
+  const [projectOptions, setProjectOptions] = useState<Project[]>([]);
+  const [targetProjectId, setTargetProjectId] = useState<string>('');
+  const [isAddingToProject, setIsAddingToProject] = useState(false);
 
   const totalCount = filteredComponents.length;
 
@@ -382,16 +394,122 @@ const ComponentDatabase: React.FC = () => {
   // 关闭模态框
   const closeModal = () => {
     setShowComponentModal(false);
+    setShowProjectSelectModal(false);
     setSelectedComponent(null);
   };
 
-  // 处理全局搜索
-  const handleGlobalSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const query = globalSearch.trim();
-      if (query) {
-        console.log('全局搜索:', query);
-      }
+  useEffect(() => {
+    if (!showComponentModal) {
+      return;
+    }
+
+    const nextProjects = listProjects();
+    setProjectOptions(nextProjects);
+    const preferredProjectId =
+      projectIdFromQuery && nextProjects.some((p) => p.id === projectIdFromQuery)
+        ? projectIdFromQuery
+        : '';
+    setTargetProjectId(preferredProjectId);
+  }, [showComponentModal, projectIdFromQuery]);
+
+  const mapComponentToModuleId = (component: Component): string | undefined => {
+    const model = component.model.toLowerCase();
+    if (model.includes('esp32')) return 'mcu_esp32_wroom';
+    if (model.includes('bme280')) return 'sensor_bme280';
+    return undefined;
+  };
+
+  const buildNextRequirementsText = (currentText: string, component: Component): string => {
+    const line = `- ${component.model} | ${component.typeName} | ${component.manufacturerName} | ${component.packageName} | ¥${component.price.toFixed(2)}`;
+    if (currentText.includes(component.model)) {
+      return currentText;
+    }
+
+    const title = '【元器件清单】';
+    const trimmed = currentText.trimEnd();
+    if (!trimmed) {
+      return `${title}\n${line}\n`;
+    }
+    if (!trimmed.includes(title)) {
+      return `${trimmed}\n\n${title}\n${line}\n`;
+    }
+    return `${trimmed}\n${line}\n`;
+  };
+
+  const addSelectedComponentToProject = () => {
+    if (!selectedComponent) {
+      return;
+    }
+    if (!targetProjectId) {
+      alert('还没有可用项目，请先创建项目');
+      navigate('/project-create');
+      return;
+    }
+
+    const project = getProjectById(targetProjectId);
+    if (!project) {
+      alert('项目不存在或已被删除');
+      return;
+    }
+
+    const existsInProject =
+      project.components.some(
+        (c) => c.componentId === selectedComponent.id || c.model === selectedComponent.model,
+      ) || (project.requirementsText ?? '').includes(selectedComponent.model);
+    if (existsInProject) {
+      alert('该元器件已存在于项目中');
+      closeModal();
+      navigate(`/project-detail?projectId=${project.id}`);
+      return;
+    }
+
+    setIsAddingToProject(true);
+    try {
+      const nextWorkflow: Workflow = (() => {
+        const moduleId = mapComponentToModuleId(selectedComponent);
+        if (!moduleId) {
+          return project.workflow;
+        }
+        const moduleDefinition = getModuleById(MODULE_CATALOG, moduleId);
+        if (!moduleDefinition) {
+          return project.workflow;
+        }
+        const alreadyHasModule = project.workflow.nodes.some((n) => n.moduleId === moduleDefinition.id);
+        if (alreadyHasModule) {
+          return project.workflow;
+        }
+        const nextIndex = project.workflow.nodes.filter((n) => n.moduleId === moduleDefinition.id).length + 1;
+        const node: WorkflowNode = {
+          id: createId('node'),
+          moduleId: moduleDefinition.id,
+          label: `${moduleDefinition.name} #${nextIndex}`,
+        };
+        return { ...project.workflow, nodes: [...project.workflow.nodes, node] };
+      })();
+
+      const nextRequirementsText = buildNextRequirementsText(project.requirementsText ?? '', selectedComponent);
+      const nextComponents = [
+        ...project.components,
+        { componentId: selectedComponent.id, model: selectedComponent.model, addedAtMs: Date.now() },
+      ];
+
+      const updated = upsertProjectFromCreateInput(
+        {
+          name: project.name,
+          description: project.description,
+          requirementsText: nextRequirementsText,
+          coverImageDataUrl: project.coverImageDataUrl,
+          workflow: nextWorkflow,
+          components: nextComponents,
+        },
+        project.id,
+      );
+
+      alert(`已添加到项目：${updated.name}`);
+      closeModal();
+      navigate(`/project-detail?projectId=${updated.id}`);
+    } finally {
+      setIsAddingToProject(false);
     }
   };
 
@@ -483,389 +601,289 @@ const ComponentDatabase: React.FC = () => {
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
-    <div className={styles.pageWrapper}>
-      {/* 顶部导航栏 */}
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-border-primary h-16 z-50 shadow-sm">
-        <div className="flex items-center justify-between h-full px-6">
-          {/* Logo和品牌 */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <i className="fas fa-microchip text-white text-lg"></i>
-              </div>
-              <h1 className={`text-xl font-bold ${styles.gradientText}`}>PCBTool.AI</h1>
-            </div>
-          </div>
-          
-          {/* 全局搜索 */}
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative">
-              <input 
-                type="text" 
-                placeholder="搜索项目、元器件、案例..." 
-                value={globalSearch}
-                onChange={(e) => setGlobalSearch(e.target.value)}
-                onKeyPress={handleGlobalSearchKeyPress}
-                className={`w-full pl-10 pr-4 py-2 border border-border-primary rounded-lg ${styles.searchFocus} bg-bg-secondary text-text-primary placeholder-text-secondary`}
-              />
-              <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
-            </div>
-          </div>
-          
-          {/* 右侧操作区 */}
-          <div className="flex items-center space-x-4">
-            {/* 消息通知 */}
-            <button className="relative p-2 text-text-secondary hover:text-primary transition-colors">
-              <i className="fas fa-bell text-lg"></i>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-danger rounded-full"></span>
-            </button>
-            
-            {/* 用户头像和下拉菜单 */}
-            <div className="relative">
-              <button className="flex items-center space-x-2 p-2 rounded-lg hover:bg-bg-secondary transition-colors">
-                <img 
-                  src="https://s.coze.cn/image/GhAzDTG1TVk/" 
-                  alt="用户头像" 
-                  className="w-8 h-8 rounded-full"
+    <AppShell pageTitle="元器件数据库" breadcrumb={['工作台', '知识库', '元器件数据库']}>
+
+      {/* 工具栏区域 */}
+      <section className="mb-6">
+        <div className="bg-white rounded-2xl shadow-card p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            {/* 搜索框 */}
+            <div className="flex-1 lg:max-w-md">
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="搜索元器件型号、关键词..." 
+                  value={componentSearch}
+                  onChange={(e) => setComponentSearch(e.target.value)}
+                  onKeyPress={handleComponentSearchKeyPress}
+                  className={`w-full pl-10 pr-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary placeholder-text-secondary`}
                 />
-                <span className="text-text-primary font-medium">张工程师</span>
-                <i className="fas fa-chevron-down text-text-secondary text-sm"></i>
+                <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
+              </div>
+            </div>
+              
+            {/* 筛选条件 */}
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+              <select 
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
+              >
+                <option value="">全部类型</option>
+                <option value="microcontroller">主控芯片</option>
+                <option value="sensor">传感器</option>
+                <option value="resistor">电阻</option>
+                <option value="capacitor">电容</option>
+                <option value="inductor">电感</option>
+                <option value="diode">二极管</option>
+                <option value="transistor">三极管</option>
+                <option value="ic">集成电路</option>
+                <option value="connector">连接器</option>
+              </select>
+                
+              <select 
+                value={manufacturerFilter}
+                onChange={(e) => setManufacturerFilter(e.target.value)}
+                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
+              >
+                <option value="">全部制造商</option>
+                <option value="ti">Texas Instruments</option>
+                <option value="st">STMicroelectronics</option>
+                <option value="nxp">NXP Semiconductors</option>
+                <option value="microchip">Microchip Technology</option>
+                <option value="arduino">Arduino</option>
+                <option value="esp">Espressif Systems</option>
+                <option value="maxim">Maxim Integrated</option>
+                <option value="analog">Analog Devices</option>
+              </select>
+                
+              <select 
+                value={packageFilter}
+                onChange={(e) => setPackageFilter(e.target.value)}
+                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
+              >
+                <option value="">全部封装</option>
+                <option value="dip">DIP</option>
+                <option value="smd">SMD</option>
+                <option value="qfp">QFP</option>
+                <option value="soic">SOIC</option>
+                <option value="to">TO</option>
+                <option value="sop">SOP</option>
+                <option value="bga">BGA</option>
+              </select>
+                
+              <button 
+                onClick={performSearch}
+                className="px-6 py-3 bg-gradient-primary text-white rounded-lg font-medium hover:shadow-glow transition-all duration-300"
+              >
+                <i className="fas fa-search mr-2"></i>
+                  搜索
               </button>
             </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      {/* 左侧菜单 */}
-      <aside className={`fixed left-0 top-16 bottom-0 w-64 bg-gradient-sidebar text-sidebar-text ${styles.sidebarTransition} z-40`}>
-        <nav className="p-4 space-y-2">
-          {/* 工作台 */}
-          <Link to="/dashboard" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-tachometer-alt text-lg"></i>
-            <span className="font-medium">工作台</span>
-          </Link>
-          
-          {/* 项目管理 */}
-          <Link to="/project-list" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-folder-open text-lg"></i>
-            <span className="font-medium">项目管理</span>
-          </Link>
-          
-          {/* 知识库 */}
-          <Link to="/knowledge-base" className={`${styles.navItem} ${styles.navItemActive} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-book text-lg"></i>
-            <span className="font-medium">知识库</span>
-          </Link>
-          
-          {/* 用户设置 */}
-          <Link to="/user-profile" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-cog text-lg"></i>
-            <span className="font-medium">用户设置</span>
-          </Link>
-        </nav>
-      </aside>
+      {/* 内容展示区域 */}
+      <section className="mb-6">
+        <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+          {/* 表格头部 */}
+          <div className="p-6 border-b border-border-primary">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">元器件列表</h3>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-2 text-sm text-text-secondary">
+                  <input 
+                    type="checkbox" 
+                    checked={currentPageComponents.length > 0 && selectedComponents.size === currentPageComponents.length}
+                    onChange={handleSelectAll}
+                    className="rounded border-border-primary"
+                  />
+                  <span>全选</span>
+                </label>
+                <button 
+                  onClick={handleBatchDelete}
+                  disabled={selectedComponents.size === 0}
+                  className="px-4 py-2 text-danger border border-danger rounded-lg hover:bg-danger hover:text-white transition-colors disabled:opacity-50"
+                >
+                  <i className="fas fa-trash mr-2"></i>
+                    批量删除
+                </button>
+              </div>
+            </div>
+          </div>
+            
+          {/* 表格内容 */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-bg-secondary">
+                <tr>
+                  <th className="text-left py-3 px-6 w-12">
+                    <input type="checkbox" className="rounded border-border-primary" />
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <button 
+                      onClick={() => sortTable('model')}
+                      className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
+                        sortField === 'model' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
+                      }`}
+                    >
+                      <span className="font-medium">元器件型号</span>
+                      <i className="fas fa-sort text-xs"></i>
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <button 
+                      onClick={() => sortTable('type')}
+                      className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
+                        sortField === 'type' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
+                      }`}
+                    >
+                      <span className="font-medium">类型</span>
+                      <i className="fas fa-sort text-xs"></i>
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <button 
+                      onClick={() => sortTable('manufacturer')}
+                      className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
+                        sortField === 'manufacturer' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
+                      }`}
+                    >
+                      <span className="font-medium">制造商</span>
+                      <i className="fas fa-sort text-xs"></i>
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <button 
+                      onClick={() => sortTable('package')}
+                      className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
+                        sortField === 'package' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
+                      }`}
+                    >
+                      <span className="font-medium">封装</span>
+                      <i className="fas fa-sort text-xs"></i>
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <button 
+                      onClick={() => sortTable('price')}
+                      className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
+                        sortField === 'price' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
+                      }`}
+                    >
+                      <span className="font-medium">单价(¥)</span>
+                      <i className="fas fa-sort text-xs"></i>
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-6 w-20">
+                    <span className="font-medium text-text-secondary">操作</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-primary">
+                {currentPageComponents.map(component => (
+                  <tr key={component.id} className={styles.tableRow}>
+                    <td className="py-4 px-6">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedComponents.has(component.id)}
+                        onChange={(e) => handleComponentSelect(component.id, e.target.checked)}
+                        className="rounded border-border-primary"
+                      />
+                    </td>
+                    <td className="py-4 px-6">
+                      <button 
+                        onClick={() => showComponentDetail(component.id)}
+                        className="text-primary hover:text-secondary font-medium text-left"
+                      >
+                        {component.model}
+                      </button>
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm font-medium">
+                        {component.typeName}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-text-primary">{component.manufacturerName}</td>
+                    <td className="py-4 px-6 text-text-primary">{component.packageName}</td>
+                    <td className="py-4 px-6 text-text-primary font-medium">{component.price.toFixed(2)}</td>
+                    <td className="py-4 px-6">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => showComponentDetail(component.id)}
+                          className="text-primary hover:text-secondary transition-colors" 
+                          title="查看详情"
+                        >
+                          <i className="fas fa-eye"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+            
+          {/* 空状态 */}
+          {filteredComponents.length === 0 && (
+            <div className="text-center py-16">
+              <i className="fas fa-search text-6xl text-text-secondary mb-4"></i>
+              <h3 className="text-lg font-medium text-text-primary mb-2">未找到相关元器件</h3>
+              <p className="text-text-secondary">请尝试调整搜索条件或关键词</p>
+            </div>
+          )}
+        </div>
+      </section>
 
-      {/* 主内容区 */}
-      <main className="ml-64 mt-16 p-6 min-h-screen">
-        {/* 页面头部 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-text-primary mb-2">元器件数据库</h2>
-              <nav className="text-sm text-text-secondary">
-                <span>工作台</span>
-                <i className="fas fa-chevron-right mx-2"></i>
-                <span>知识库</span>
-                <i className="fas fa-chevron-right mx-2"></i>
-                <span>元器件数据库</span>
-              </nav>
+      {/* 分页区域 */}
+      <section>
+        <div className="bg-white rounded-2xl shadow-card p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+            {/* 显示信息 */}
+            <div className="text-sm text-text-secondary">
+                显示 <span>{totalCount > 0 ? startIndex : 0}</span> - <span>{endIndex}</span> 条，共 <span>{totalCount.toLocaleString()}</span> 条记录
+            </div>
+              
+            {/* 每页条数选择 */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-text-secondary">每页显示</span>
+              <select 
+                value={pageSize}
+                onChange={handlePageSizeChange}
+                className={`px-3 py-1 border border-border-primary rounded ${styles.searchFocus} text-text-primary bg-white`}
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span className="text-sm text-text-secondary">条</span>
+            </div>
+              
+            {/* 分页按钮 */}
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => changePage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 border border-border-primary rounded ${styles.paginationButton} disabled:opacity-50`}
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              <div className="flex items-center space-x-1">
+                {renderPaginationButtons()}
+              </div>
+              <button 
+                onClick={() => changePage(currentPage + 1)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className={`px-3 py-1 border border-border-primary rounded ${styles.paginationButton} disabled:opacity-50`}
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
             </div>
           </div>
         </div>
-
-        {/* 工具栏区域 */}
-        <section className="mb-6">
-          <div className="bg-white rounded-2xl shadow-card p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-              {/* 搜索框 */}
-              <div className="flex-1 lg:max-w-md">
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="搜索元器件型号、关键词..." 
-                    value={componentSearch}
-                    onChange={(e) => setComponentSearch(e.target.value)}
-                    onKeyPress={handleComponentSearchKeyPress}
-                    className={`w-full pl-10 pr-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary placeholder-text-secondary`}
-                  />
-                  <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
-                </div>
-              </div>
-              
-              {/* 筛选条件 */}
-              <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-                <select 
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-                >
-                  <option value="">全部类型</option>
-                  <option value="microcontroller">主控芯片</option>
-                  <option value="sensor">传感器</option>
-                  <option value="resistor">电阻</option>
-                  <option value="capacitor">电容</option>
-                  <option value="inductor">电感</option>
-                  <option value="diode">二极管</option>
-                  <option value="transistor">三极管</option>
-                  <option value="ic">集成电路</option>
-                  <option value="connector">连接器</option>
-                </select>
-                
-                <select 
-                  value={manufacturerFilter}
-                  onChange={(e) => setManufacturerFilter(e.target.value)}
-                  className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-                >
-                  <option value="">全部制造商</option>
-                  <option value="ti">Texas Instruments</option>
-                  <option value="st">STMicroelectronics</option>
-                  <option value="nxp">NXP Semiconductors</option>
-                  <option value="microchip">Microchip Technology</option>
-                  <option value="arduino">Arduino</option>
-                  <option value="esp">Espressif Systems</option>
-                  <option value="maxim">Maxim Integrated</option>
-                  <option value="analog">Analog Devices</option>
-                </select>
-                
-                <select 
-                  value={packageFilter}
-                  onChange={(e) => setPackageFilter(e.target.value)}
-                  className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-                >
-                  <option value="">全部封装</option>
-                  <option value="dip">DIP</option>
-                  <option value="smd">SMD</option>
-                  <option value="qfp">QFP</option>
-                  <option value="soic">SOIC</option>
-                  <option value="to">TO</option>
-                  <option value="sop">SOP</option>
-                  <option value="bga">BGA</option>
-                </select>
-                
-                <button 
-                  onClick={performSearch}
-                  className="px-6 py-3 bg-gradient-primary text-white rounded-lg font-medium hover:shadow-glow transition-all duration-300"
-                >
-                  <i className="fas fa-search mr-2"></i>
-                  搜索
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 内容展示区域 */}
-        <section className="mb-6">
-          <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-            {/* 表格头部 */}
-            <div className="p-6 border-b border-border-primary">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-text-primary">元器件列表</h3>
-                <div className="flex items-center space-x-4">
-                  <label className="flex items-center space-x-2 text-sm text-text-secondary">
-                    <input 
-                      type="checkbox" 
-                      checked={currentPageComponents.length > 0 && selectedComponents.size === currentPageComponents.length}
-                      onChange={handleSelectAll}
-                      className="rounded border-border-primary"
-                    />
-                    <span>全选</span>
-                  </label>
-                  <button 
-                    onClick={handleBatchDelete}
-                    disabled={selectedComponents.size === 0}
-                    className="px-4 py-2 text-danger border border-danger rounded-lg hover:bg-danger hover:text-white transition-colors disabled:opacity-50"
-                  >
-                    <i className="fas fa-trash mr-2"></i>
-                    批量删除
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            {/* 表格内容 */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-bg-secondary">
-                  <tr>
-                    <th className="text-left py-3 px-6 w-12">
-                      <input type="checkbox" className="rounded border-border-primary" />
-                    </th>
-                    <th className="text-left py-3 px-6">
-                      <button 
-                        onClick={() => sortTable('model')}
-                        className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
-                          sortField === 'model' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
-                        }`}
-                      >
-                        <span className="font-medium">元器件型号</span>
-                        <i className="fas fa-sort text-xs"></i>
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-6">
-                      <button 
-                        onClick={() => sortTable('type')}
-                        className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
-                          sortField === 'type' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
-                        }`}
-                      >
-                        <span className="font-medium">类型</span>
-                        <i className="fas fa-sort text-xs"></i>
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-6">
-                      <button 
-                        onClick={() => sortTable('manufacturer')}
-                        className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
-                          sortField === 'manufacturer' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
-                        }`}
-                      >
-                        <span className="font-medium">制造商</span>
-                        <i className="fas fa-sort text-xs"></i>
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-6">
-                      <button 
-                        onClick={() => sortTable('package')}
-                        className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
-                          sortField === 'package' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
-                        }`}
-                      >
-                        <span className="font-medium">封装</span>
-                        <i className="fas fa-sort text-xs"></i>
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-6">
-                      <button 
-                        onClick={() => sortTable('price')}
-                        className={`flex items-center space-x-1 text-text-secondary hover:text-primary ${styles.sortButton} px-2 py-1 rounded ${
-                          sortField === 'price' ? (sortOrder === 'asc' ? styles.sortAsc : styles.sortDesc) : ''
-                        }`}
-                      >
-                        <span className="font-medium">单价(¥)</span>
-                        <i className="fas fa-sort text-xs"></i>
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-6 w-20">
-                      <span className="font-medium text-text-secondary">操作</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-primary">
-                  {currentPageComponents.map(component => (
-                    <tr key={component.id} className={styles.tableRow}>
-                      <td className="py-4 px-6">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedComponents.has(component.id)}
-                          onChange={(e) => handleComponentSelect(component.id, e.target.checked)}
-                          className="rounded border-border-primary"
-                        />
-                      </td>
-                      <td className="py-4 px-6">
-                        <button 
-                          onClick={() => showComponentDetail(component.id)}
-                          className="text-primary hover:text-secondary font-medium text-left"
-                        >
-                          {component.model}
-                        </button>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm font-medium">
-                          {component.typeName}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-text-primary">{component.manufacturerName}</td>
-                      <td className="py-4 px-6 text-text-primary">{component.packageName}</td>
-                      <td className="py-4 px-6 text-text-primary font-medium">{component.price.toFixed(2)}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-2">
-                          <button 
-                            onClick={() => showComponentDetail(component.id)}
-                            className="text-primary hover:text-secondary transition-colors" 
-                            title="查看详情"
-                          >
-                            <i className="fas fa-eye"></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* 空状态 */}
-            {filteredComponents.length === 0 && (
-              <div className="text-center py-16">
-                <i className="fas fa-search text-6xl text-text-secondary mb-4"></i>
-                <h3 className="text-lg font-medium text-text-primary mb-2">未找到相关元器件</h3>
-                <p className="text-text-secondary">请尝试调整搜索条件或关键词</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* 分页区域 */}
-        <section>
-          <div className="bg-white rounded-2xl shadow-card p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-              {/* 显示信息 */}
-              <div className="text-sm text-text-secondary">
-                显示 <span>{totalCount > 0 ? startIndex : 0}</span> - <span>{endIndex}</span> 条，共 <span>{totalCount.toLocaleString()}</span> 条记录
-              </div>
-              
-              {/* 每页条数选择 */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-text-secondary">每页显示</span>
-                <select 
-                  value={pageSize}
-                  onChange={handlePageSizeChange}
-                  className={`px-3 py-1 border border-border-primary rounded ${styles.searchFocus} text-text-primary bg-white`}
-                >
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-                <span className="text-sm text-text-secondary">条</span>
-              </div>
-              
-              {/* 分页按钮 */}
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => changePage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 border border-border-primary rounded ${styles.paginationButton} disabled:opacity-50`}
-                >
-                  <i className="fas fa-chevron-left"></i>
-                </button>
-                <div className="flex items-center space-x-1">
-                  {renderPaginationButtons()}
-                </div>
-                <button 
-                  onClick={() => changePage(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className={`px-3 py-1 border border-border-primary rounded ${styles.paginationButton} disabled:opacity-50`}
-                >
-                  <i className="fas fa-chevron-right"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
+      </section>
       {/* 元器件详情模态框 */}
       {showComponentModal && selectedComponent && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
@@ -947,25 +965,125 @@ const ComponentDatabase: React.FC = () => {
               {/* 模态框底部 */}
               <div className="p-6 border-t border-border-primary">
                 <div className="flex items-center justify-end space-x-3">
-                  <button 
+                  <button
+                    type="button"
                     onClick={closeModal}
                     className="px-6 py-2 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
                   >
                     关闭
                   </button>
-                  <button className="px-6 py-2 bg-gradient-primary text-white rounded-lg hover:shadow-glow transition-all duration-300">
-                    <i className="fas fa-plus mr-2"></i>
-                    添加到项目
-                  </button>
+                  {projectOptions.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeModal();
+                        navigate('/project-create');
+                      }}
+                      className="px-6 py-2 bg-gradient-primary text-white rounded-lg hover:shadow-glow transition-all duration-300"
+                    >
+                      去创建项目
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowProjectSelectModal(true)}
+                      className="px-6 py-2 bg-gradient-primary text-white rounded-lg hover:shadow-glow transition-all duration-300"
+                    >
+                      <i className="fas fa-plus mr-2"></i>
+                      添加到项目
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+      {/* 项目选择模态框 */}
+      {showProjectSelectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60]">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="bg-white rounded-2xl shadow-card max-w-md w-full overflow-hidden">
+              <div className="p-6 border-b border-border-primary">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-text-primary">选择项目</h3>
+                  <button 
+                    onClick={() => setShowProjectSelectModal(false)}
+                    className="p-2 text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    <i className="fas fa-times text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="space-y-4">
+                  <p className="text-sm text-text-secondary">请选择要将 <strong>{selectedComponent?.model}</strong> 添加到的项目：</p>
+                  <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    {projectOptions.map((p) => (
+                      <label 
+                        key={p.id}
+                        className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
+                          targetProjectId === p.id 
+                            ? 'border-primary bg-primary bg-opacity-5' 
+                            : 'border-border-primary hover:border-primary hover:bg-bg-secondary'
+                        }`}
+                      >
+                        <input 
+                          type="radio"
+                          name="targetProject"
+                          value={p.id}
+                          checked={targetProjectId === p.id}
+                          onChange={(e) => setTargetProjectId(e.target.value)}
+                          className="hidden"
+                        />
+                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
+                          targetProjectId === p.id ? 'border-primary' : 'border-border-primary'
+                        }`}>
+                          {targetProjectId === p.id && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-text-primary truncate">{p.name}</div>
+                          <div className="text-xs text-text-secondary truncate">{p.description || '无描述'}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border-primary flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProjectSelectModal(false)}
+                  className="px-6 py-2 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={!targetProjectId || isAddingToProject}
+                  onClick={addSelectedComponentToProject}
+                  className="px-6 py-2 bg-gradient-primary text-white rounded-lg hover:shadow-glow transition-all duration-300 disabled:opacity-50"
+                >
+                  {isAddingToProject ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      添加中...
+                    </>
+                  ) : (
+                    <>
+                      确认添加
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </AppShell>
   );
 };
 
 export default ComponentDatabase;
-

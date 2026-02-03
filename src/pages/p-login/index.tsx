@@ -109,15 +109,15 @@ const LoginPage: React.FC = () => {
   // 密码显示/隐藏切换函数
   const togglePasswordVisibility = (field: 'login' | 'register' | 'confirm') => {
     switch (field) {
-      case 'login':
-        setShowLoginPassword(!showLoginPassword);
-        break;
-      case 'register':
-        setShowRegisterPassword(!showRegisterPassword);
-        break;
-      case 'confirm':
-        setShowConfirmPassword(!showConfirmPassword);
-        break;
+    case 'login':
+      setShowLoginPassword(!showLoginPassword);
+      break;
+    case 'register':
+      setShowRegisterPassword(!showRegisterPassword);
+      break;
+    case 'confirm':
+      setShowConfirmPassword(!showConfirmPassword);
+      break;
     }
   };
 

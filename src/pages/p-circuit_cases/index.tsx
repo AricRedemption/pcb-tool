@@ -1,7 +1,11 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import AppShell from '../../components/AppShell';
+import { createEmptyWorkflow, createId, getModuleById } from '../../domain/workflow';
+import { MODULE_CATALOG } from '../../domain/moduleCatalog';
+import { upsertProjectFromCreateInput, setProjectStatus } from '../../lib/projectsStore';
 import styles from './styles.module.css';
 import { CaseData, CaseDatabase } from './types';
 
@@ -9,7 +13,6 @@ const CircuitCasesPage: React.FC = () => {
   const navigate = useNavigate();
   
   // 状态管理
-  const [globalSearchValue, setGlobalSearchValue] = useState('');
   const [caseSearchValue, setCaseSearchValue] = useState('');
   const [applicationFilter, setApplicationFilter] = useState('');
   const [complexityFilter, setComplexityFilter] = useState('');
@@ -228,17 +231,6 @@ const CircuitCasesPage: React.FC = () => {
     return classes[complexity] || 'px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium';
   };
 
-  // 全局搜索处理
-  const handleGlobalSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const query = globalSearchValue.trim();
-      if (query) {
-        console.log('全局搜索:', query);
-        // 这里可以添加全局搜索逻辑
-      }
-    }
-  };
-
   // 案例搜索处理
   const handleCaseSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -279,9 +271,57 @@ const CircuitCasesPage: React.FC = () => {
 
   // 应用案例到项目
   const handleUseCase = () => {
-    console.log('应用案例到项目');
-    alert('案例已成功应用到新项目！');
+    if (!selectedCaseData) return;
+    
+    // 创建一个基于案例的新项目
+    const workflow = createEmptyWorkflow();
+    
+    // 默认添加 USB 电源
+    const powerModule = getModuleById(MODULE_CATALOG, 'power_usb_5v');
+    if (powerModule) {
+      workflow.nodes.push({
+        id: createId('node'),
+        moduleId: powerModule.id,
+        label: 'USB电源',
+      });
+    }
+
+    // 如果是 ESP32 案例，添加 ESP32
+    if (selectedCaseData.name.includes('ESP32') || selectedCaseData.components.some(c => c.name.includes('ESP32'))) {
+      const mcu = getModuleById(MODULE_CATALOG, 'mcu_esp32_wroom');
+      if (mcu) {
+        workflow.nodes.push({
+          id: createId('node'),
+          moduleId: mcu.id,
+          label: 'ESP32主控',
+        });
+      }
+         
+      // 还可以尝试添加 BME280 如果有
+      if (selectedCaseData.components.some(c => c.name.includes('BME280') || c.name.includes('温湿度'))) {
+        const sensor = getModuleById(MODULE_CATALOG, 'sensor_bme280');
+        if (sensor) {
+          workflow.nodes.push({
+            id: createId('node'),
+            moduleId: sensor.id,
+            label: 'BME280传感器',
+          });
+        }
+      }
+    }
+
+    const project = upsertProjectFromCreateInput({
+      name: `${selectedCaseData.name} (Copy)`,
+      description: `基于案例 "${selectedCaseData.name}" 创建的项目。\n${selectedCaseData.description}`,
+      requirementsText: selectedCaseData.description,
+      coverImageDataUrl: selectedCaseData.image,
+      workflow: workflow,
+    });
+    
+    setProjectStatus(project.id, 'draft');
+    
     handleCloseModal();
+    navigate(`/project-create?projectId=${project.id}`);
   };
 
   // 分页处理
@@ -323,105 +363,8 @@ const CircuitCasesPage: React.FC = () => {
   );
 
   return (
-    <div className={styles.pageWrapper}>
-      {/* 顶部导航栏 */}
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-border-primary h-16 z-50 shadow-sm">
-        <div className="flex items-center justify-between h-full px-6">
-          {/* Logo和品牌 */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <i className="fas fa-microchip text-white text-lg"></i>
-              </div>
-              <h1 className={`text-xl font-bold ${styles.gradientText}`}>PCBTool.AI</h1>
-            </div>
-          </div>
-          
-          {/* 全局搜索 */}
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative">
-              <input
-                type="text"
-                value={globalSearchValue}
-                onChange={(e) => setGlobalSearchValue(e.target.value)}
-                onKeyPress={handleGlobalSearchKeyPress}
-                placeholder="搜索项目、元器件、案例..."
-                className={`w-full pl-10 pr-4 py-2 border border-border-primary rounded-lg ${styles.searchFocus} bg-bg-secondary text-text-primary placeholder-text-secondary`}
-              />
-              <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
-            </div>
-          </div>
-          
-          {/* 右侧操作区 */}
-          <div className="flex items-center space-x-4">
-            {/* 消息通知 */}
-            <button className="relative p-2 text-text-secondary hover:text-primary transition-colors">
-              <i className="fas fa-bell text-lg"></i>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-danger rounded-full"></span>
-            </button>
-            
-            {/* 用户头像和下拉菜单 */}
-            <div className="relative">
-              <button className="flex items-center space-x-2 p-2 rounded-lg hover:bg-bg-secondary transition-colors">
-                <img
-                  src="https://s.coze.cn/image/jZ1ms1fMX3s/"
-                  alt="用户头像"
-                  className="w-8 h-8 rounded-full"
-                />
-                <span className="text-text-primary font-medium">张工程师</span>
-                <i className="fas fa-chevron-down text-text-secondary text-sm"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* 左侧菜单 */}
-      <aside className={`fixed left-0 top-16 bottom-0 w-64 bg-gradient-sidebar text-sidebar-text ${styles.sidebarTransition} z-40`}>
-        <nav className="p-4 space-y-2">
-          {/* 工作台 */}
-          <Link to="/dashboard" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-tachometer-alt text-lg"></i>
-            <span className="font-medium">工作台</span>
-          </Link>
-          
-          {/* 项目管理 */}
-          <Link to="/project-list" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-folder-open text-lg"></i>
-            <span className="font-medium">项目管理</span>
-          </Link>
-          
-          {/* 知识库 */}
-          <Link to="/knowledge-base" className={`${styles.navItem} ${styles.navItemActive} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-book text-lg"></i>
-            <span className="font-medium">知识库</span>
-          </Link>
-          
-          {/* 用户设置 */}
-          <Link to="/user-profile" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-cog text-lg"></i>
-            <span className="font-medium">用户设置</span>
-          </Link>
-        </nav>
-      </aside>
-
-      {/* 主内容区 */}
-      <main className="ml-64 mt-16 p-6 min-h-screen">
-        {/* 页面头部 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-text-primary mb-2">电路案例库</h2>
-              <nav className="text-sm text-text-secondary">
-                <span>工作台</span>
-                <i className="fas fa-chevron-right mx-2"></i>
-                <span>知识库</span>
-                <i className="fas fa-chevron-right mx-2"></i>
-                <span className="text-primary">电路案例库</span>
-              </nav>
-            </div>
-          </div>
-        </div>
+    <AppShell pageTitle="电路案例库" breadcrumb={['工作台', '知识库', '电路案例库']}>
+      <>
 
         {/* 工具栏区域 */}
         <section className="mb-6">
@@ -584,114 +527,113 @@ const CircuitCasesPage: React.FC = () => {
             </div>
           </div>
         </section>
-      </main>
 
-      {/* 案例详情模态弹窗 */}
-      {isModalVisible && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={handleCloseModal}>
-          <div className="flex items-center justify-center min-h-screen p-4">
-            <div
-              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 模态弹窗头部 */}
-              <div className="flex items-center justify-between p-6 border-b border-border-primary">
-                <h3 className="text-xl font-semibold text-text-primary">案例详情</h3>
-                <button onClick={handleCloseModal} className="text-text-secondary hover:text-text-primary transition-colors">
-                  <i className="fas fa-times text-xl"></i>
-                </button>
-              </div>
+        {/* 案例详情模态弹窗 */}
+        {isModalVisible && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={handleCloseModal}>
+            <div className="flex items-center justify-center min-h-screen p-4">
+              <div
+                className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* 模态弹窗头部 */}
+                <div className="flex items-center justify-between p-6 border-b border-border-primary">
+                  <h3 className="text-xl font-semibold text-text-primary">案例详情</h3>
+                  <button onClick={handleCloseModal} className="text-text-secondary hover:text-text-primary transition-colors">
+                    <i className="fas fa-times text-xl"></i>
+                  </button>
+                </div>
               
-              {/* 模态弹窗内容 */}
-              <div className="p-6">
-                {selectedCaseData ? (
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">案例名称</h4>
-                      <p className="text-text-secondary">{selectedCaseData.name}</p>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">应用领域</h4>
-                      <span className={getApplicationClass(selectedCaseData.application)}>{selectedCaseData.application}</span>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">复杂度</h4>
-                      <span className={getComplexityClass(selectedCaseData.complexity)}>{selectedCaseData.complexity}</span>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">案例描述</h4>
-                      <p className="text-text-secondary leading-relaxed">{selectedCaseData.description}</p>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">主要元器件</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {selectedCaseData.components.map((component, index) => (
-                          <div key={index} className="flex items-center space-x-3 p-3 bg-bg-secondary rounded-lg">
-                            <i className="fas fa-microchip text-primary"></i>
-                            <div>
-                              <div className="font-medium text-text-primary">{component.name}</div>
-                              <div className="text-sm text-text-secondary">{component.type}</div>
-                            </div>
-                          </div>
-                        ))}
+                {/* 模态弹窗内容 */}
+                <div className="p-6">
+                  {selectedCaseData ? (
+                    <div className="space-y-6">
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">案例名称</h4>
+                        <p className="text-text-secondary">{selectedCaseData.name}</p>
                       </div>
-                    </div>
                     
-                    <div>
-                      <h4 className="font-semibold text-text-primary mb-2">相关文件</h4>
-                      <div className="space-y-2">
-                        {selectedCaseData.files.map((file, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 border border-border-primary rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <i className="fas fa-file-alt text-primary"></i>
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">应用领域</h4>
+                        <span className={getApplicationClass(selectedCaseData.application)}>{selectedCaseData.application}</span>
+                      </div>
+                    
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">复杂度</h4>
+                        <span className={getComplexityClass(selectedCaseData.complexity)}>{selectedCaseData.complexity}</span>
+                      </div>
+                    
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">案例描述</h4>
+                        <p className="text-text-secondary leading-relaxed">{selectedCaseData.description}</p>
+                      </div>
+                    
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">主要元器件</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {selectedCaseData.components.map((component, index) => (
+                            <div key={index} className="flex items-center space-x-3 p-3 bg-bg-secondary rounded-lg">
+                              <i className="fas fa-microchip text-primary"></i>
                               <div>
-                                <div className="font-medium text-text-primary">{file.name}</div>
-                                <div className="text-sm text-text-secondary">{file.size}</div>
+                                <div className="font-medium text-text-primary">{component.name}</div>
+                                <div className="text-sm text-text-secondary">{component.type}</div>
                               </div>
                             </div>
-                            <button className="text-primary hover:text-secondary transition-colors">
-                              <i className="fas fa-download"></i>
-                            </button>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      </div>
+                    
+                      <div>
+                        <h4 className="font-semibold text-text-primary mb-2">相关文件</h4>
+                        <div className="space-y-2">
+                          {selectedCaseData.files.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 border border-border-primary rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <i className="fas fa-file-alt text-primary"></i>
+                                <div>
+                                  <div className="font-medium text-text-primary">{file.name}</div>
+                                  <div className="text-sm text-text-secondary">{file.size}</div>
+                                </div>
+                              </div>
+                              <button className="text-primary hover:text-secondary transition-colors">
+                                <i className="fas fa-download"></i>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <i className="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
-                    <p className="text-text-secondary">加载中...</p>
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <i className="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+                      <p className="text-text-secondary">加载中...</p>
+                    </div>
+                  )}
+                </div>
               
-              {/* 模态弹窗底部 */}
-              <div className="flex items-center justify-end space-x-3 p-6 border-t border-border-primary">
-                <button
-                  onClick={handleCloseModal}
-                  className="px-6 py-2 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
-                >
+                {/* 模态弹窗底部 */}
+                <div className="flex items-center justify-end space-x-3 p-6 border-t border-border-primary">
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-6 py-2 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
+                  >
                   关闭
-                </button>
-                <button
-                  onClick={handleUseCase}
-                  className="bg-gradient-primary text-white px-6 py-2 rounded-lg font-medium hover:shadow-glow transition-all duration-300"
-                >
-                  <i className="fas fa-plus mr-2"></i>
+                  </button>
+                  <button
+                    onClick={handleUseCase}
+                    className="bg-gradient-primary text-white px-6 py-2 rounded-lg font-medium hover:shadow-glow transition-all duration-300"
+                  >
+                    <i className="fas fa-plus mr-2"></i>
                   应用到项目
-                </button>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </>
+    </AppShell>
   );
 };
 
 export default CircuitCasesPage;
-

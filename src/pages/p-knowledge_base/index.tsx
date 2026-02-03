@@ -1,27 +1,18 @@
 
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import AppShell from '../../components/AppShell';
 import styles from './styles.module.css';
 
 const KnowledgeBasePage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const originalTitle = document.title;
     document.title = '知识库 - PCBTool.AI';
     return () => { document.title = originalTitle; };
   }, []);
-
-  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const query = searchQuery.trim();
-      if (query) {
-        navigate(`/component-db?search=${encodeURIComponent(query)}`);
-      }
-    }
-  };
 
   const handleCategoryComponentsClick = () => {
     navigate('/component-db');
@@ -61,105 +52,8 @@ const KnowledgeBasePage: React.FC = () => {
   };
 
   return (
-    <div className={styles.pageWrapper}>
-      {/* 顶部导航栏 */}
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-border-primary h-16 z-50 shadow-sm">
-        <div className="flex items-center justify-between h-full px-6">
-          {/* Logo和品牌 */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <i className="fas fa-microchip text-white text-lg"></i>
-              </div>
-              <h1 className={`text-xl font-bold ${styles.gradientText}`}>PCBTool.AI</h1>
-            </div>
-          </div>
-          
-          {/* 全局搜索 */}
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative">
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                placeholder="搜索项目、元器件、案例..." 
-                className={`w-full pl-10 pr-4 py-2 border border-border-primary rounded-lg ${styles.searchFocus} bg-bg-secondary text-text-primary placeholder-text-secondary`}
-              />
-              <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
-            </div>
-          </div>
-          
-          {/* 右侧操作区 */}
-          <div className="flex items-center space-x-4">
-            {/* 消息通知 */}
-            <button className="relative p-2 text-text-secondary hover:text-primary transition-colors">
-              <i className="fas fa-bell text-lg"></i>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-danger rounded-full"></span>
-            </button>
-            
-            {/* 用户头像和下拉菜单 */}
-            <div className="relative">
-              <button className="flex items-center space-x-2 p-2 rounded-lg hover:bg-bg-secondary transition-colors">
-                <img 
-                  src="https://s.coze.cn/image/BPUjE5QEGfQ/" 
-                  alt="用户头像" 
-                  className="w-8 h-8 rounded-full"
-                />
-                <span className="text-text-primary font-medium">张工程师</span>
-                <i className="fas fa-chevron-down text-text-secondary text-sm"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* 左侧菜单 */}
-      <aside className={`fixed left-0 top-16 bottom-0 w-64 bg-gradient-sidebar text-sidebar-text ${styles.sidebarTransition} z-40`}>
-        <nav className="p-4 space-y-2">
-          {/* 工作台 */}
-          <Link to="/dashboard" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-tachometer-alt text-lg"></i>
-            <span className="font-medium">工作台</span>
-          </Link>
-          
-          {/* 项目管理 */}
-          <Link to="/project-list" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-folder-open text-lg"></i>
-            <span className="font-medium">项目管理</span>
-          </Link>
-          
-          {/* 知识库 */}
-          <Link to="/knowledge-base" className={`${styles.navItem} ${styles.navItemActive} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-book text-lg"></i>
-            <span className="font-medium">知识库</span>
-          </Link>
-          
-          {/* 用户设置 */}
-          <Link to="/user-profile" className={`${styles.navItem} flex items-center space-x-3 px-4 py-3 rounded-lg`}>
-            <i className="fas fa-cog text-lg"></i>
-            <span className="font-medium">用户设置</span>
-          </Link>
-        </nav>
-      </aside>
-
-      {/* 主内容区 */}
-      <main className="ml-64 mt-16 p-6 min-h-screen">
-        {/* 页面头部 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-text-primary mb-2">知识库</h2>
-              <nav className="text-sm text-text-secondary">
-                <span>工作台</span>
-                <i className="fas fa-chevron-right mx-2"></i>
-                <span>知识库</span>
-              </nav>
-            </div>
-          </div>
-        </div>
-
-        {/* 知识库统计概览 */}
+    <AppShell pageTitle="知识库" breadcrumb={['工作台', '知识库']}>
+      <>
         <section className="mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white rounded-2xl p-6 shadow-card">
@@ -212,11 +106,9 @@ const KnowledgeBasePage: React.FC = () => {
           </div>
         </section>
 
-        {/* 知识库分类区 */}
         <section className="mb-8">
           <h3 className="text-xl font-semibold text-text-primary mb-6">知识库分类</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* 元器件数据库 */}
             <div 
               onClick={handleCategoryComponentsClick}
               className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}
@@ -240,7 +132,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 电路案例库 */}
             <div 
               onClick={handleCategoryCasesClick}
               className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}
@@ -264,7 +155,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 设计指南 */}
             <div className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-warning rounded-2xl flex items-center justify-center">
@@ -285,7 +175,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 封装库 */}
             <div className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-tertiary rounded-2xl flex items-center justify-center">
@@ -306,7 +195,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 技术标准 */}
             <div className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-info rounded-2xl flex items-center justify-center">
@@ -327,7 +215,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 工具手册 */}
             <div className={`bg-gradient-card rounded-2xl p-6 shadow-card ${styles.categoryCard} cursor-pointer transition-all duration-300`}>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-danger rounded-2xl flex items-center justify-center">
@@ -350,7 +237,6 @@ const KnowledgeBasePage: React.FC = () => {
           </div>
         </section>
 
-        {/* 热门内容区 */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-text-primary">热门内容</h3>
@@ -364,7 +250,6 @@ const KnowledgeBasePage: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 热门元器件 */}
             <div className="bg-white rounded-2xl shadow-card">
               <div className="p-6 border-b border-border-primary">
                 <h4 className="font-semibold text-text-primary flex items-center">
@@ -440,7 +325,6 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
             </div>
             
-            {/* 精选电路案例 */}
             <div className="bg-white rounded-2xl shadow-card">
               <div className="p-6 border-b border-border-primary">
                 <h4 className="font-semibold text-text-primary flex items-center">
@@ -506,7 +390,6 @@ const KnowledgeBasePage: React.FC = () => {
           </div>
         </section>
 
-        {/* 最近更新 */}
         <section className="mb-8">
           <h3 className="text-xl font-semibold text-text-primary mb-6">最近更新</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -539,15 +422,14 @@ const KnowledgeBasePage: React.FC = () => {
                 </div>
                 <span className="text-sm font-medium text-text-primary">新增案例</span>
               </div>
-              <p className="text-sm text-text-secondary mb-2">新增了"太阳能充电控制器"完整设计案例</p>
+              <p className="text-sm text-text-secondary mb-2">新增了“太阳能充电控制器”完整设计案例</p>
               <p className="text-xs text-text-secondary">1天前</p>
             </div>
           </div>
         </section>
-      </main>
-    </div>
+      </>
+    </AppShell>
   );
 };
 
 export default KnowledgeBasePage;
-

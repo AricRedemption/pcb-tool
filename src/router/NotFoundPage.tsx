@@ -15,7 +15,7 @@ const NotFoundPage: React.FC = () => {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, \'Noto Sans\', sans-serif, \'Apple Color Emoji\', \'Segoe UI Emoji\', \'Segoe UI Symbol\', \'Noto Color Emoji\'',
     background: 'linear-gradient(180deg, #f3f5ff 0%, #ffffff 100%)',
     color: '#2d3748',
     textAlign: 'center',

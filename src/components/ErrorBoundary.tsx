@@ -1,7 +1,6 @@
-// @ts-nocheck
 // src/components/ErrorBoundary.tsx
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -26,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   // 3. 在错误被捕获后，这个生命周期方法被调用，适合执行“副作用”，比如记日志
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
     if (!import.meta.env.DEV) {
       return;
     }
@@ -37,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
       window.parent.postMessage({
         type: 'chux:error',
         error: {
-          message: error.message || error.statusText,
+          message: error.message || 'Unknown error',
           stack: error.stack,
         },
       }, 'https://www.coze.cn');

@@ -39,94 +39,94 @@ const router = createBrowserRouter([
     element: <Listener />,
     children: [
       {
-    path: '/',
-    element: <Navigate to='/login' replace={true} />,
-  },
+        path: '/',
+        element: <Navigate to='/login' replace={true} />,
+      },
       {
-    path: '/login',
-    element: (
-      <ErrorBoundary>
-        <P_login />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/login',
+        element: (
+          <ErrorBoundary>
+            <P_login />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/dashboard',
-    element: (
-      <ErrorBoundary>
-        <P_dashboard />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/dashboard',
+        element: (
+          <ErrorBoundary>
+            <P_dashboard />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/project-list',
-    element: (
-      <ErrorBoundary>
-        <P_project_list />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/project-list',
+        element: (
+          <ErrorBoundary>
+            <P_project_list />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/project-create',
-    element: (
-      <ErrorBoundary>
-        <P_project_create />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/project-create',
+        element: (
+          <ErrorBoundary>
+            <P_project_create />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/project-detail',
-    element: (
-      <ErrorBoundary>
-        <P_project_detail />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/project-detail',
+        element: (
+          <ErrorBoundary>
+            <P_project_detail />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/knowledge-base',
-    element: (
-      <ErrorBoundary>
-        <P_knowledge_base />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/knowledge-base',
+        element: (
+          <ErrorBoundary>
+            <P_knowledge_base />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/component-db',
-    element: (
-      <ErrorBoundary>
-        <P_component_db />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/component-db',
+        element: (
+          <ErrorBoundary>
+            <P_component_db />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/circuit-cases',
-    element: (
-      <ErrorBoundary>
-        <P_circuit_cases />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/circuit-cases',
+        element: (
+          <ErrorBoundary>
+            <P_circuit_cases />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '/user-profile',
-    element: (
-      <ErrorBoundary>
-        <P_user_profile />
-      </ErrorBoundary>
-    ),
-    errorElement: <ErrorPage />,
-  },
+        path: '/user-profile',
+        element: (
+          <ErrorBoundary>
+            <P_user_profile />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
+      },
       {
-    path: '*',
-    element: <NotFoundPage />,
-  },
+        path: '*',
+        element: <NotFoundPage />,
+      },
     ]
   }
 ]);
