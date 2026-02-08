@@ -16,7 +16,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 
-import { Workflow, getModuleById } from '../../domain/workflow';
+import { Workflow, WorkflowModuleDefinition, getModuleById } from '../../domain/workflow';
 import { MODULE_CATALOG } from '../../domain/moduleCatalog';
 import ModuleNode, { ModuleNodeData } from './ModuleNode';
 
@@ -29,6 +29,7 @@ interface WorkflowGraphProps {
   workflow: Workflow;
   className?: string;
   onNodeClick?: (event: React.MouseEvent, node: Node) => void;
+  moduleCatalog?: readonly WorkflowModuleDefinition[];
 }
 
 // 估算节点尺寸用于布局计算
@@ -101,9 +102,10 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   return { nodes: layoutedNodes, edges };
 };
 
-const WorkflowGraph: React.FC<WorkflowGraphProps> = ({ workflow, className, onNodeClick }) => {
+const WorkflowGraph: React.FC<WorkflowGraphProps> = ({ workflow, className, onNodeClick, moduleCatalog }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const catalog = moduleCatalog ?? MODULE_CATALOG;
 
   // 处理连接事件
   const onConnect = useCallback(
@@ -114,7 +116,7 @@ const WorkflowGraph: React.FC<WorkflowGraphProps> = ({ workflow, className, onNo
   // 将 Workflow 数据转换为 React Flow 格式
   useEffect(() => {
     const initialNodes: Node[] = workflow.nodes.map((node) => {
-      const moduleDef = getModuleById(MODULE_CATALOG, node.moduleId);
+      const moduleDef = getModuleById(catalog, node.moduleId);
       return {
         id: node.id,
         type: 'module',
@@ -151,7 +153,7 @@ const WorkflowGraph: React.FC<WorkflowGraphProps> = ({ workflow, className, onNo
 
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
-  }, [workflow, setNodes, setEdges]);
+  }, [workflow, catalog, setNodes, setEdges]);
 
   return (
     <div className={`w-full h-full bg-slate-50 ${className || ''}`}>

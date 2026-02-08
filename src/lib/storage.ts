@@ -30,3 +30,26 @@ export function removeFromLocalStorage(key: string): void {
   }
   window.localStorage.removeItem(key);
 }
+
+export type AiProvider = 'openai' | 'anthropic';
+
+export interface AiConfig {
+  provider: AiProvider;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  temperature?: number;
+  lastTestOk?: boolean;
+  lastTestedAt?: number;
+  lastTestError?: string;
+}
+
+const AI_CONFIG_STORAGE_KEY = 'pcbtool.aiConfig.v1';
+
+export function loadAiConfig(): AiConfig | undefined {
+  return loadFromLocalStorage<AiConfig>(AI_CONFIG_STORAGE_KEY);
+}
+
+export function saveAiConfig(config: AiConfig): void {
+  saveToLocalStorage(AI_CONFIG_STORAGE_KEY, config);
+}

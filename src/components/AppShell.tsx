@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { AiConfig, loadAiConfig } from '../lib/storage';
 
 type NavItem = {
   to: string;
@@ -34,8 +35,30 @@ export default function AppShell({ pageTitle, breadcrumb, children }: AppShellPr
   const navigate = useNavigate();
   const [isSidebarOpenOnMobile, setIsSidebarOpenOnMobile] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [aiConfig, setAiConfig] = useState<AiConfig | undefined>(() => loadAiConfig());
 
   const breadcrumbItems = useMemo(() => breadcrumb ?? ['工作台', pageTitle], [breadcrumb, pageTitle]);
+
+  useEffect(() => {
+    setAiConfig(loadAiConfig());
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'pcbtool.aiConfig.v1') {
+        setAiConfig(loadAiConfig());
+      }
+    };
+    const handleAiConfigUpdated = () => {
+      setAiConfig(loadAiConfig());
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('ai-config-updated', handleAiConfigUpdated);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('ai-config-updated', handleAiConfigUpdated);
+    };
+  }, []);
 
   const handleGlobalSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') {
@@ -51,6 +74,15 @@ export default function AppShell({ pageTitle, breadcrumb, children }: AppShellPr
   const handleAvatarClick = () => {
     navigate('/user-profile');
   };
+
+  const isAiConfigured = Boolean(aiConfig?.baseUrl && aiConfig?.apiKey && aiConfig?.model);
+  const isAiConnected = Boolean(isAiConfigured && aiConfig?.lastTestOk);
+  const aiStatusText = !isAiConfigured
+    ? 'AI 未配置'
+    : isAiConnected
+      ? 'AI 连接正常'
+      : 'AI 未连接';
+  const aiDotClass = isAiConnected ? 'bg-success' : 'bg-danger';
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -88,6 +120,17 @@ export default function AppShell({ pageTitle, breadcrumb, children }: AppShellPr
           </div>
 
           <div className="flex items-center space-x-4">
+            <button
+              type="button"
+              onClick={() => navigate('/user-profile')}
+              className="flex items-center space-x-2 px-2 py-1 rounded-full hover:bg-bg-secondary transition-colors"
+              aria-label={aiStatusText}
+            >
+              <span className={`w-3 h-3 rounded-full animate-pulse ${aiDotClass}`}></span>
+              <span className="text-xs text-text-secondary">
+                {isAiConfigured ? aiConfig?.model : '未设置模型'}
+              </span>
+            </button>
             <button
               type="button"
               className="relative p-2 text-text-secondary hover:text-primary transition-colors"

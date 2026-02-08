@@ -338,19 +338,19 @@ const ProjectCreatePage: React.FC = () => {
 
           <div className="space-y-6">
             <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">
-                模块拼接工作流 <span className="text-text-secondary text-sm font-normal">(可选)</span>
+              模块拼接工作流 <span className="text-text-secondary text-sm font-normal">(可选)</span>
             </h3>
 
             {/* 可视化预览图 */}
             <div className="border border-border-primary rounded-lg overflow-hidden h-[500px] bg-gray-50">
-               {workflow.nodes.length > 0 ? (
-                 <WorkflowGraph workflow={workflow} />
-               ) : (
-                 <div className="h-full flex flex-col items-center justify-center text-text-secondary">
-                   <i className="fas fa-project-diagram text-4xl mb-4 opacity-30"></i>
-                   <p>添加模块后此处将显示连接图</p>
-                 </div>
-               )}
+              {workflow.nodes.length > 0 ? (
+                <WorkflowGraph workflow={workflow} />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-text-secondary">
+                  <i className="fas fa-project-diagram text-4xl mb-4 opacity-30"></i>
+                  <p>添加模块后此处将显示连接图</p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

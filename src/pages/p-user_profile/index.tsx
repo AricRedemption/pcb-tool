@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppShell from '../../components/AppShell';
+import { AiConfig, loadAiConfig, saveAiConfig } from '../../lib/storage';
 import styles from './styles.module.css';
 
 interface BasicProfileForm {
@@ -26,7 +27,15 @@ interface NotificationPreferencesForm {
   inappSound: boolean;
 }
 
-type SettingType = 'basic' | 'security' | 'notifications';
+type SettingType = 'basic' | 'security' | 'notifications' | 'ai';
+
+const defaultAiConfig: AiConfig = {
+  provider: 'openai',
+  baseUrl: 'https://api.openai.com/v1',
+  apiKey: '',
+  model: 'gpt-4o-mini',
+  temperature: 0.2,
+};
 
 const UserProfilePage: React.FC = () => {
   const [activeSetting, setActiveSetting] = useState<SettingType>('basic');
@@ -55,6 +64,11 @@ const UserProfilePage: React.FC = () => {
     inappRealtime: true,
     inappSound: false
   });
+
+  const [aiConfigForm, setAiConfigForm] = useState<AiConfig>(() => loadAiConfig() ?? defaultAiConfig);
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [aiTestError, setAiTestError] = useState<string | null>(null);
+  const [aiTestSuccess, setAiTestSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const originalTitle = document.title;
@@ -133,6 +147,118 @@ const UserProfilePage: React.FC = () => {
     showSuccessToast('通知偏好已更新');
   };
 
+  const handleAiConfigSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiConfigForm.baseUrl.trim() || !aiConfigForm.apiKey.trim() || !aiConfigForm.model.trim()) {
+      alert('请完整填写 Base URL、API Key 和模型名称');
+      return;
+    }
+    setIsSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    const nextConfig = {
+      ...aiConfigForm,
+      baseUrl: aiConfigForm.baseUrl.trim(),
+      apiKey: aiConfigForm.apiKey.trim(),
+      model: aiConfigForm.model.trim(),
+      lastTestOk: aiConfigForm.lastTestOk ?? false,
+      lastTestedAt: aiConfigForm.lastTestedAt,
+      lastTestError: aiConfigForm.lastTestError,
+    };
+    saveAiConfig(nextConfig);
+    window.dispatchEvent(new Event('ai-config-updated'));
+    setIsSubmitting(false);
+    showSuccessToast('AI算力配置已保存');
+  };
+
+  const normalizeBaseUrl = (baseUrl: string) => baseUrl.replace(/\/$/, '');
+  const buildEndpoint = (baseUrl: string, provider: AiConfig['provider']) => {
+    const normalized = normalizeBaseUrl(baseUrl);
+    if (provider === 'openai') {
+      return normalized.endsWith('/v1') ? `${normalized}/chat/completions` : `${normalized}/v1/chat/completions`;
+    }
+    return normalized.endsWith('/v1') ? `${normalized}/messages` : `${normalized}/v1/messages`;
+  };
+
+  const handleAiConnectionTest = async () => {
+    if (!aiConfigForm.baseUrl.trim() || !aiConfigForm.apiKey.trim() || !aiConfigForm.model.trim()) {
+      alert('请完整填写 Base URL、API Key 和模型名称');
+      return;
+    }
+    setAiTestError(null);
+    setAiTestSuccess(null);
+    setIsTestingAi(true);
+    try {
+      const endpoint = buildEndpoint(aiConfigForm.baseUrl.trim(), aiConfigForm.provider);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers:
+          aiConfigForm.provider === 'openai'
+            ? {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${aiConfigForm.apiKey.trim()}`,
+            }
+            : {
+              'Content-Type': 'application/json',
+              'x-api-key': aiConfigForm.apiKey.trim(),
+              'anthropic-version': '2023-06-01',
+            },
+        body:
+          aiConfigForm.provider === 'openai'
+            ? JSON.stringify({
+              model: aiConfigForm.model.trim(),
+              temperature: 0,
+              max_tokens: 1,
+              messages: [
+                { role: 'system', content: 'ping' },
+                { role: 'user', content: 'ping' },
+              ],
+            })
+            : JSON.stringify({
+              model: aiConfigForm.model.trim(),
+              temperature: 0,
+              max_tokens: 1,
+              system: 'ping',
+              messages: [{ role: 'user', content: 'ping' }],
+            }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`请求失败：${response.status}`);
+      }
+
+      const nextConfig: AiConfig = {
+        ...aiConfigForm,
+        baseUrl: aiConfigForm.baseUrl.trim(),
+        apiKey: aiConfigForm.apiKey.trim(),
+        model: aiConfigForm.model.trim(),
+        lastTestOk: true,
+        lastTestedAt: Date.now(),
+        lastTestError: undefined,
+      };
+      saveAiConfig(nextConfig);
+      window.dispatchEvent(new Event('ai-config-updated'));
+      setAiConfigForm(nextConfig);
+      setAiTestSuccess('连接成功');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '连接失败';
+      const nextConfig: AiConfig = {
+        ...aiConfigForm,
+        baseUrl: aiConfigForm.baseUrl.trim(),
+        apiKey: aiConfigForm.apiKey.trim(),
+        model: aiConfigForm.model.trim(),
+        lastTestOk: false,
+        lastTestedAt: Date.now(),
+        lastTestError: message,
+      };
+      saveAiConfig(nextConfig);
+      window.dispatchEvent(new Event('ai-config-updated'));
+      setAiConfigForm(nextConfig);
+      setAiTestError(message);
+    } finally {
+      setIsTestingAi(false);
+    }
+  };
+
   const handleBasicProfileCancel = () => {
     setBasicProfileForm({
       fullName: '张工程师',
@@ -159,6 +285,12 @@ const UserProfilePage: React.FC = () => {
       inappRealtime: true,
       inappSound: false
     });
+  };
+
+  const handleAiConfigCancel = () => {
+    setAiConfigForm(loadAiConfig() ?? defaultAiConfig);
+    setAiTestError(null);
+    setAiTestSuccess(null);
   };
 
   return (
@@ -190,6 +322,13 @@ const UserProfilePage: React.FC = () => {
             >
               <i className="fas fa-bell mr-3"></i>
               <span className="font-medium">通知偏好</span>
+            </button>
+            <button 
+              onClick={() => handleSettingChange('ai')}
+              className={`${styles.settingItem} ${activeSetting === 'ai' ? styles.settingItemActive : ''} w-full text-left px-4 py-3 rounded-lg transition-all`}
+            >
+              <i className="fas fa-brain mr-3"></i>
+              <span className="font-medium">AI算力配置</span>
             </button>
           </div>
         </div>
@@ -487,6 +626,104 @@ const UserProfilePage: React.FC = () => {
               </form>
             </div>
           )}
+
+          {activeSetting === 'ai' && (
+            <div className="bg-white rounded-2xl shadow-card p-8">
+              <h3 className="text-xl font-semibold text-text-primary mb-2">AI算力配置</h3>
+              <p className="text-sm text-text-secondary mb-6">平台不提供算力，所有请求将使用你配置的服务</p>
+              <form onSubmit={handleAiConfigSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-text-primary">提供方</label>
+                  <select
+                    value={aiConfigForm.provider}
+                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, provider: e.target.value as AiConfig['provider'] }))}
+                    className="w-full px-4 py-3 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-text-primary">Base URL</label>
+                  <input
+                    type="text"
+                    value={aiConfigForm.baseUrl}
+                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, baseUrl: e.target.value }))}
+                    className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} text-text-primary`}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-text-primary">API Key</label>
+                  <input
+                    type="password"
+                    value={aiConfigForm.apiKey}
+                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, apiKey: e.target.value }))}
+                    className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} text-text-primary`}
+                    placeholder="sk-..."
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">模型名称</label>
+                    <input
+                      type="text"
+                      value={aiConfigForm.model}
+                      onChange={(e) => setAiConfigForm(prev => ({ ...prev, model: e.target.value }))}
+                      className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} text-text-primary`}
+                      placeholder="gpt-4o-mini / claude-3-5-sonnet"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">温度</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      value={aiConfigForm.temperature ?? 0.2}
+                      onChange={(e) => setAiConfigForm(prev => ({ ...prev, temperature: Number(e.target.value) }))}
+                      className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} text-text-primary`}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pt-4">
+                  <div className="text-sm">
+                    {aiTestSuccess && (
+                      <span className="text-success">{aiTestSuccess}</span>
+                    )}
+                    {!aiTestSuccess && aiTestError && (
+                      <span className="text-danger">{aiTestError}</span>
+                    )}
+                  </div>
+                  <div className="flex justify-end space-x-4">
+                    <button
+                      type="button"
+                      onClick={handleAiConnectionTest}
+                      disabled={isTestingAi}
+                      className="px-6 py-3 border border-border-primary text-text-primary rounded-lg hover:bg-bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      {isTestingAi ? '测试中...' : '测试连接'}
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleAiConfigCancel}
+                      className="px-6 py-3 border border-border-primary text-text-primary rounded-lg hover:bg-bg-secondary transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="px-6 py-3 bg-gradient-primary text-white rounded-lg hover:shadow-glow transition-all disabled:opacity-50"
+                    >
+                      {isSubmitting ? '保存中...' : '保存配置'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       </div>
       {/* 成功提示消息 */}
@@ -503,4 +740,3 @@ const UserProfilePage: React.FC = () => {
 };
 
 export default UserProfilePage;
-

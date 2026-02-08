@@ -1,4 +1,4 @@
-import { Project, ProjectCreateInput, ProjectStatus } from '../domain/project';
+import { Project, ProjectCreateInput, ProjectStatus, ProjectSolution } from '../domain/project';
 import { createId, createEmptyWorkflow } from '../domain/workflow';
 import { loadFromLocalStorage, saveToLocalStorage } from './storage';
 
@@ -33,6 +33,8 @@ export function listProjects(): Project[] {
       status: normalizeStatus(p.status),
       workflow: p.workflow ?? createEmptyWorkflow(),
       components: p.components ?? [],
+      solutions: p.solutions ?? [],
+      solutionsUpdatedAtMs: p.solutionsUpdatedAtMs ?? p.updatedAtMs,
     }))
     .sort((a, b) => b.updatedAtMs - a.updatedAtMs);
 }
@@ -56,6 +58,8 @@ export function upsertProjectFromCreateInput(input: ProjectCreateInput, projectI
     components:
       input.components ??
       (existingIndex >= 0 ? snapshot.projects[existingIndex].components ?? [] : []),
+    solutions: existingIndex >= 0 ? snapshot.projects[existingIndex].solutions ?? [] : [],
+    solutionsUpdatedAtMs: existingIndex >= 0 ? snapshot.projects[existingIndex].solutionsUpdatedAtMs : undefined,
     status: existingIndex >= 0 ? snapshot.projects[existingIndex].status : 'draft',
     createdAtMs: existingIndex >= 0 ? snapshot.projects[existingIndex].createdAtMs : now,
     updatedAtMs: now,
@@ -82,5 +86,20 @@ export function setProjectStatus(projectId: string, status: ProjectStatus): void
 export function deleteProject(projectId: string): void {
   const snapshot = loadFromLocalStorage<ProjectsSnapshotV1>(PROJECTS_STORAGE_KEY) ?? createEmptySnapshot();
   snapshot.projects = snapshot.projects.filter((p) => p.id !== projectId);
+  saveToLocalStorage(PROJECTS_STORAGE_KEY, snapshot);
+}
+
+export function setProjectSolutions(projectId: string, solutions: ProjectSolution[]): void {
+  const snapshot = loadFromLocalStorage<ProjectsSnapshotV1>(PROJECTS_STORAGE_KEY) ?? createEmptySnapshot();
+  snapshot.projects = snapshot.projects.map((p) =>
+    p.id === projectId
+      ? {
+        ...p,
+        solutions,
+        solutionsUpdatedAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      }
+      : p,
+  );
   saveToLocalStorage(PROJECTS_STORAGE_KEY, snapshot);
 }
