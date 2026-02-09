@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AppShell from '../../components/AppShell';
+import { Select } from '../../components/ui/select';
 import { createEmptyWorkflow, createId, getModuleById } from '../../domain/workflow';
 import { MODULE_CATALOG } from '../../domain/moduleCatalog';
 import { upsertProjectFromCreateInput, setProjectStatus } from '../../lib/projectsStore';
@@ -11,7 +13,8 @@ import { CaseData, CaseDatabase } from './types';
 
 const CircuitCasesPage: React.FC = () => {
   const navigate = useNavigate();
-  
+  const { t } = useTranslation();
+
   // 状态管理
   const [caseSearchValue, setCaseSearchValue] = useState('');
   const [applicationFilter, setApplicationFilter] = useState('');
@@ -25,9 +28,9 @@ const CircuitCasesPage: React.FC = () => {
   // 设置页面标题
   useEffect(() => {
     const originalTitle = document.title;
-    document.title = '电路案例库 - PCBTool.AI';
+    document.title = `${t('circuit_cases.page_title')} - PCBTool.AI`;
     return () => { document.title = originalTitle; };
-  }, []);
+  }, [t]);
 
   // 案例数据库
   const caseDatabase: CaseDatabase = {
@@ -329,8 +332,8 @@ const CircuitCasesPage: React.FC = () => {
     setCurrentPage(page);
   };
 
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setPageSize(Number(e.target.value));
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(Number(value));
     setCurrentPage(1);
   };
 
@@ -357,13 +360,13 @@ const CircuitCasesPage: React.FC = () => {
       </div>
       <div className="flex items-center justify-between text-xs text-text-secondary">
         <span><i className="fas fa-calendar mr-1"></i>{caseData.date}</span>
-        <span><i className="fas fa-eye mr-1"></i>{caseData.views} 次浏览</span>
+        <span><i className="fas fa-eye mr-1"></i>{t('circuit_cases.views_count', { count: caseData.views })}</span>
       </div>
     </div>
   );
 
   return (
-    <AppShell pageTitle="电路案例库" breadcrumb={['工作台', '知识库', '电路案例库']}>
+    <AppShell pageTitle={t('circuit_cases.page_title')} breadcrumb={[t('circuit_cases.breadcrumb_home'), t('circuit_cases.breadcrumb_knowledge'), t('circuit_cases.breadcrumb_cases')]}>
       <>
 
         {/* 工具栏区域 */}
@@ -378,48 +381,48 @@ const CircuitCasesPage: React.FC = () => {
                     value={caseSearchValue}
                     onChange={(e) => setCaseSearchValue(e.target.value)}
                     onKeyPress={handleCaseSearchKeyPress}
-                    placeholder="搜索案例名称、关键词..."
+                    placeholder={t('circuit_cases.search_placeholder')}
                     className={`w-full pl-10 pr-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary placeholder-text-secondary`}
                   />
                   <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
                 </div>
               </div>
-              
+
               {/* 筛选条件 */}
               <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                 {/* 应用领域筛选 */}
-                <div className="relative">
-                  <select
+                <div className="w-40">
+                  <Select
                     value={applicationFilter}
-                    onChange={(e) => setApplicationFilter(e.target.value)}
-                    className={`appearance-none bg-white border border-border-primary rounded-lg px-4 py-3 pr-10 ${styles.filterFocus} text-text-primary`}
-                  >
-                    <option value="">全部领域</option>
-                    <option value="consumer">消费电子</option>
-                    <option value="industrial">工业控制</option>
-                    <option value="automotive">汽车电子</option>
-                    <option value="medical">医疗电子</option>
-                    <option value="iot">物联网</option>
-                    <option value="power">电源管理</option>
-                  </select>
-                  <i className="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary pointer-events-none"></i>
+                    onChange={setApplicationFilter}
+                    options={[
+                      { label: t('circuit_cases.filter_all_fields'), value: '' },
+                      { label: t('circuit_cases.filter_consumer'), value: 'consumer' },
+                      { label: t('circuit_cases.filter_industrial'), value: 'industrial' },
+                      { label: t('circuit_cases.filter_automotive'), value: 'automotive' },
+                      { label: t('circuit_cases.filter_medical'), value: 'medical' },
+                      { label: t('circuit_cases.filter_iot'), value: 'iot' },
+                      { label: t('circuit_cases.filter_power'), value: 'power' },
+                    ]}
+                    placeholder={t('circuit_cases.filter_all_fields')}
+                  />
                 </div>
-                
+
                 {/* 复杂度筛选 */}
-                <div className="relative">
-                  <select
+                <div className="w-40">
+                  <Select
                     value={complexityFilter}
-                    onChange={(e) => setComplexityFilter(e.target.value)}
-                    className={`appearance-none bg-white border border-border-primary rounded-lg px-4 py-3 pr-10 ${styles.filterFocus} text-text-primary`}
-                  >
-                    <option value="">全部复杂度</option>
-                    <option value="simple">简单</option>
-                    <option value="medium">中等</option>
-                    <option value="complex">复杂</option>
-                  </select>
-                  <i className="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary pointer-events-none"></i>
+                    onChange={setComplexityFilter}
+                    options={[
+                      { label: t('circuit_cases.filter_all_complexity'), value: '' },
+                      { label: t('circuit_cases.filter_simple'), value: 'simple' },
+                      { label: t('circuit_cases.filter_medium'), value: 'medium' },
+                      { label: t('circuit_cases.filter_complex'), value: 'complex' },
+                    ]}
+                    placeholder={t('circuit_cases.filter_all_complexity')}
+                  />
                 </div>
-                
+
                 {/* 搜索按钮 */}
                 <button
                   onClick={performSearch}
@@ -427,7 +430,7 @@ const CircuitCasesPage: React.FC = () => {
                   className="bg-gradient-primary text-white px-6 py-3 rounded-lg font-medium hover:shadow-glow transition-all duration-300 disabled:opacity-50"
                 >
                   <i className={`fas ${isSearching ? 'fa-spinner fa-spin' : 'fa-search'} mr-2`}></i>
-                  {isSearching ? '搜索中...' : '搜索'}
+                  {isSearching ? t('circuit_cases.btn_searching') : t('circuit_cases.btn_search')}
                 </button>
               </div>
             </div>
@@ -440,9 +443,9 @@ const CircuitCasesPage: React.FC = () => {
             {/* 案例统计 */}
             <div className="p-6 border-b border-border-primary">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-text-primary">电路案例</h3>
+                <h3 className="text-xl font-semibold text-text-primary">{t('circuit_cases.cases_title')}</h3>
                 <div className="text-sm text-text-secondary">
-                  共 <span className="font-medium text-primary">12,345</span> 个案例
+                  {t('circuit_cases.cases_count', { count: '12,345' })}
                 </div>
               </div>
             </div>
@@ -459,7 +462,7 @@ const CircuitCasesPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                 {/* 显示信息 */}
                 <div className="text-sm text-text-secondary">
-                  显示第 <span className="font-medium text-text-primary">1-8</span> 条，共 <span className="font-medium text-text-primary">12,345</span> 条记录
+                  {t('circuit_cases.pagination_showing', { start: '1', end: '8', total: '12,345' })}
                 </div>
                 
                 {/* 分页控件 */}
@@ -510,18 +513,20 @@ const CircuitCasesPage: React.FC = () => {
                 
                 {/* 每页条数选择 */}
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-text-secondary">每页显示</span>
-                  <select
-                    value={pageSize}
-                    onChange={handlePageSizeChange}
-                    className={`appearance-none bg-white border border-border-primary rounded-lg px-3 py-2 pr-8 ${styles.filterFocus} text-text-primary text-sm`}
-                  >
-                    <option value="8">8</option>
-                    <option value="16">16</option>
-                    <option value="32">32</option>
-                    <option value="64">64</option>
-                  </select>
-                  <i className="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary pointer-events-none"></i>
+                  <span className="text-sm text-text-secondary">{t('circuit_cases.pagination_per_page')}</span>
+                  <div className="w-20">
+                    <Select
+                      value={pageSize.toString()}
+                      onChange={handlePageSizeChange}
+                      options={[
+                        { label: '8', value: '8' },
+                        { label: '16', value: '16' },
+                        { label: '32', value: '32' },
+                        { label: '64', value: '64' },
+                      ]}
+                      placeholder="8"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -538,38 +543,38 @@ const CircuitCasesPage: React.FC = () => {
               >
                 {/* 模态弹窗头部 */}
                 <div className="flex items-center justify-between p-6 border-b border-border-primary">
-                  <h3 className="text-xl font-semibold text-text-primary">案例详情</h3>
+                  <h3 className="text-xl font-semibold text-text-primary">{t('circuit_cases.modal_title')}</h3>
                   <button onClick={handleCloseModal} className="text-text-secondary hover:text-text-primary transition-colors">
                     <i className="fas fa-times text-xl"></i>
                   </button>
                 </div>
-              
+
                 {/* 模态弹窗内容 */}
                 <div className="p-6">
                   {selectedCaseData ? (
                     <div className="space-y-6">
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">案例名称</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_case_name')}</h4>
                         <p className="text-text-secondary">{selectedCaseData.name}</p>
                       </div>
-                    
+
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">应用领域</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_application')}</h4>
                         <span className={getApplicationClass(selectedCaseData.application)}>{selectedCaseData.application}</span>
                       </div>
-                    
+
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">复杂度</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_complexity')}</h4>
                         <span className={getComplexityClass(selectedCaseData.complexity)}>{selectedCaseData.complexity}</span>
                       </div>
-                    
+
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">案例描述</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_description')}</h4>
                         <p className="text-text-secondary leading-relaxed">{selectedCaseData.description}</p>
                       </div>
-                    
+
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">主要元器件</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_components')}</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {selectedCaseData.components.map((component, index) => (
                             <div key={index} className="flex items-center space-x-3 p-3 bg-bg-secondary rounded-lg">
@@ -582,9 +587,9 @@ const CircuitCasesPage: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                    
+
                       <div>
-                        <h4 className="font-semibold text-text-primary mb-2">相关文件</h4>
+                        <h4 className="font-semibold text-text-primary mb-2">{t('circuit_cases.modal_files')}</h4>
                         <div className="space-y-2">
                           {selectedCaseData.files.map((file, index) => (
                             <div key={index} className="flex items-center justify-between p-3 border border-border-primary rounded-lg">
@@ -606,25 +611,25 @@ const CircuitCasesPage: React.FC = () => {
                   ) : (
                     <div className="text-center py-12">
                       <i className="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
-                      <p className="text-text-secondary">加载中...</p>
+                      <p className="text-text-secondary">{t('circuit_cases.modal_loading')}</p>
                     </div>
                   )}
                 </div>
-              
+
                 {/* 模态弹窗底部 */}
                 <div className="flex items-center justify-end space-x-3 p-6 border-t border-border-primary">
                   <button
                     onClick={handleCloseModal}
                     className="px-6 py-2 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
                   >
-                  关闭
+                  {t('circuit_cases.btn_close')}
                   </button>
                   <button
                     onClick={handleUseCase}
                     className="bg-gradient-primary text-white px-6 py-2 rounded-lg font-medium hover:shadow-glow transition-all duration-300"
                   >
                     <i className="fas fa-plus mr-2"></i>
-                  应用到项目
+                  {t('circuit_cases.btn_apply')}
                   </button>
                 </div>
               </div>

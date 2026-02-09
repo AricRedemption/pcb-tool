@@ -4,10 +4,11 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import AppShell from "../../components/AppShell";
-import { MODULE_CATALOG } from "../../domain/moduleCatalog";
+} from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import AppShell from '../../components/AppShell';
+import { MODULE_CATALOG } from '../../domain/moduleCatalog';
 import {
   Project,
   ProjectSolution,
@@ -24,7 +25,7 @@ import {
   WorkflowEdge as RDWorkflowEdge,
   WorkflowGate,
   OpenQuestion,
-} from "../../domain/project";
+} from '../../domain/project';
 import {
   createId,
   createEmptyWorkflow,
@@ -34,63 +35,62 @@ import {
   WorkflowConnection,
   WorkflowModuleDefinition,
   WorkflowPortDefinition,
-} from "../../domain/workflow";
-import WorkflowGraph from "../../components/WorkflowGraph";
-import L0Graph from "../../components/ArchitectureGraph/L0Graph";
-import L1Graph from "../../components/ArchitectureGraph/L1Graph";
-import RDWorkflowGraph from "../../components/RDWorkflowGraph";
+} from '../../domain/workflow';
+import WorkflowGraph from '../../components/WorkflowGraph';
+import L1Graph from '../../components/ArchitectureGraph/L1Graph';
+import RDWorkflowGraph from '../../components/RDWorkflowGraph';
 import {
   deleteProject,
   getProjectById,
   setProjectSolutions,
   setProjectStatus,
-} from "../../lib/projectsStore";
-import { loadAiConfig } from "../../lib/storage";
+} from '../../lib/projectsStore';
+import { loadAiConfig } from '../../lib/storage';
 
-type TabKey = "workflow" | "requirements" | "schemes";
+type TabKey = 'workflow' | 'requirements' | 'schemes';
 
 function formatDateTime(ms: number): string {
   const date = new Date(ms);
   const yyyy = String(date.getFullYear());
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
 }
 
-function formatRiskLabel(risk: SolutionRiskLevel): string {
-  if (risk === "low") {
-    return "低";
+function formatRiskLabel(risk: SolutionRiskLevel, t: any): string {
+  if (risk === 'low') {
+    return t('project_detail.risk_low');
   }
-  if (risk === "high") {
-    return "高";
+  if (risk === 'high') {
+    return t('project_detail.risk_high');
   }
-  return "中";
+  return t('project_detail.risk_medium');
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/$/, "");
+  return baseUrl.replace(/\/$/, '');
 }
 
 function buildEndpoint(
   baseUrl: string,
-  provider: "openai" | "anthropic",
+  provider: 'openai' | 'anthropic',
 ): string {
   const normalized = normalizeBaseUrl(baseUrl);
-  if (provider === "openai") {
-    return normalized.endsWith("/v1")
+  if (provider === 'openai') {
+    return normalized.endsWith('/v1')
       ? `${normalized}/chat/completions`
       : `${normalized}/v1/chat/completions`;
   }
-  return normalized.endsWith("/v1")
+  return normalized.endsWith('/v1')
     ? `${normalized}/messages`
     : `${normalized}/v1/messages`;
 }
 
 function extractJsonFromText(text: string): string {
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
   if (first === -1 || last === -1 || last <= first) {
     return text;
   }
@@ -102,18 +102,18 @@ function extractJsonPayload(text: string): string {
   const candidate = codeBlockMatch ? codeBlockMatch[1] : text;
   const trimmed = candidate.trim();
   if (
-    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
   ) {
     return trimmed;
   }
-  const objectStart = trimmed.indexOf("{");
-  const objectEnd = trimmed.lastIndexOf("}");
+  const objectStart = trimmed.indexOf('{');
+  const objectEnd = trimmed.lastIndexOf('}');
   if (objectStart !== -1 && objectEnd > objectStart) {
     return trimmed.slice(objectStart, objectEnd + 1);
   }
-  const arrayStart = trimmed.indexOf("[");
-  const arrayEnd = trimmed.lastIndexOf("]");
+  const arrayStart = trimmed.indexOf('[');
+  const arrayEnd = trimmed.lastIndexOf(']');
   if (arrayStart !== -1 && arrayEnd > arrayStart) {
     return trimmed.slice(arrayStart, arrayEnd + 1);
   }
@@ -122,10 +122,10 @@ function extractJsonPayload(text: string): string {
 
 function sanitizeJsonText(text: string): string {
   return text
-    .replace(/^\uFEFF/, "")
-    .replace(/```(?:json)?/gi, "")
-    .replace(/```/g, "")
-    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/^\uFEFF/, '')
+    .replace(/```(?:json)?/gi, '')
+    .replace(/```/g, '')
+    .replace(/,\s*([}\]])/g, '$1')
     .trim();
 }
 
@@ -140,66 +140,66 @@ function parseJsonWithRepair(text: string): unknown {
 
 function extractOpenAiMessageText(message: unknown): string {
   if (!message) {
-    return "";
+    return '';
   }
-  if (typeof message === "string") {
+  if (typeof message === 'string') {
     return message;
   }
   const record = toRecord(message);
   if (!record) {
-    return "";
+    return '';
   }
   const content = record.content;
-  if (typeof content === "string") {
+  if (typeof content === 'string') {
     return content;
   }
   if (Array.isArray(content)) {
     return content
       .map((item) => {
-        if (typeof item === "string") {
+        if (typeof item === 'string') {
           return item;
         }
         const itemRecord = toRecord(item);
         if (!itemRecord) {
-          return "";
+          return '';
         }
-        return toString(itemRecord.text) ?? "";
+        return toString(itemRecord.text) ?? '';
       })
       .filter((item) => item.trim().length > 0)
-      .join("\n");
+      .join('\n');
   }
-  return "";
+  return '';
 }
 
 function extractAnthropicText(content: unknown): string {
-  if (typeof content === "string") {
+  if (typeof content === 'string') {
     return content;
   }
   if (Array.isArray(content)) {
     return content
       .map((item) => {
-        if (typeof item === "string") {
+        if (typeof item === 'string') {
           return item;
         }
         const itemRecord = toRecord(item);
         if (!itemRecord) {
-          return "";
+          return '';
         }
-        return toString(itemRecord.text) ?? "";
+        return toString(itemRecord.text) ?? '';
       })
       .filter((item) => item.trim().length > 0)
-      .join("\n");
+      .join('\n');
   }
   const record = toRecord(content);
-  return record ? (toString(record.text) ?? "") : "";
+  return record ? (toString(record.text) ?? '') : '';
 }
 
 function extractTextByProvider(
-  provider: "openai" | "anthropic",
+  provider: 'openai' | 'anthropic',
   data: unknown,
 ): string {
   const record = toRecord(data);
-  if (provider === "openai") {
+  if (provider === 'openai') {
     const recordObject = record ?? {};
     const choices = Array.isArray(recordObject.choices)
       ? recordObject.choices
@@ -225,20 +225,20 @@ function extractTextByProvider(
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   return value as Record<string, unknown>;
 }
 
-function toString(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) {
+function toString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) {
     return value.trim();
   }
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return String(value);
   }
-  return null;
+  return undefined;
 }
 
 function toStringArray(value: unknown): string[] {
@@ -252,24 +252,24 @@ function toStringArray(value: unknown): string[] {
 }
 
 function normalizeRiskLevel(value: unknown): SolutionRiskLevel {
-  const raw = toString(value)?.toLowerCase() ?? "";
-  if (raw.includes("low") || raw.includes("低")) {
-    return "low";
+  const raw = toString(value)?.toLowerCase() ?? '';
+  if (raw.includes('low') || raw.includes('低')) {
+    return 'low';
   }
-  if (raw.includes("high") || raw.includes("高")) {
-    return "high";
+  if (raw.includes('high') || raw.includes('高')) {
+    return 'high';
   }
-  return "medium";
+  return 'medium';
 }
 
 function normalizeSolutionModule(
   value: unknown,
-): ProjectSolution["modules"][number] {
+): ProjectSolution['modules'][number] {
   const record = toRecord(value) ?? {};
   return {
-    id: toString(record.id) ?? createId("mod"),
-    name: toString(record.name) ?? "模块",
-    summary: toString(record.summary) ?? "",
+    id: toString(record.id) ?? createId('mod'),
+    name: toString(record.name) ?? '模块',
+    summary: toString(record.summary) ?? '',
     inputs: toStringArray(record.inputs ?? record.input),
     outputs: toStringArray(record.outputs ?? record.output),
     dependencies: toStringArray(record.dependencies ?? record.dependency),
@@ -280,33 +280,33 @@ function normalizeSolutionModule(
 
 function normalizeSolutionEdge(
   value: unknown,
-): ProjectSolution["edges"][number] {
+): ProjectSolution['edges'][number] {
   const record = toRecord(value) ?? {};
   return {
-    source: toString(record.source) ?? "",
-    target: toString(record.target) ?? "",
-    kind: toString(record.kind) ?? "",
-    contract: toString(record.contract) ?? "",
-    criticality: toString(record.criticality) ?? "",
+    source: toString(record.source) ?? '',
+    target: toString(record.target) ?? '',
+    kind: toString(record.kind) ?? '',
+    contract: toString(record.contract) ?? '',
+    criticality: toString(record.criticality) ?? '',
   };
 }
 
 function normalizeSolutionMilestone(
   value: unknown,
-): ProjectSolution["milestones"][number] {
+): ProjectSolution['milestones'][number] {
   const record = toRecord(value) ?? {};
   return {
-    name: toString(record.name) ?? "",
+    name: toString(record.name) ?? '',
     deliverables: toStringArray(record.deliverables ?? record.deliverable),
-    timeframe: toString(record.timeframe) ?? "",
+    timeframe: toString(record.timeframe) ?? '',
   };
 }
 
-function normalizeSolutionAssets(value: unknown): ProjectSolution["assets"] {
+function normalizeSolutionAssets(value: unknown): ProjectSolution['assets'] {
   const record = toRecord(value) ?? {};
   return {
-    flow: toString(record.flow) ?? "",
-    ia: toString(record.ia) ?? "",
+    flow: toString(record.flow) ?? '',
+    ia: toString(record.ia) ?? '',
     wireframes: toStringArray(record.wireframes ?? record.wireframe),
   };
 }
@@ -471,10 +471,10 @@ function normalizeSolution(
   return {
     id: toString(record.id) ?? createId(`sol_${index + 1}`),
     name: toString(record.name) ?? `方案 ${index + 1}`,
-    positioning: toString(record.positioning ?? record.position) ?? "均衡",
-    costRange: toString(record.costRange ?? record.cost) ?? "待评估",
+    positioning: toString(record.positioning ?? record.position) ?? '均衡',
+    costRange: toString(record.costRange ?? record.cost) ?? '待评估',
     durationRange:
-      toString(record.durationRange ?? record.duration) ?? "待评估",
+      toString(record.durationRange ?? record.duration) ?? '待评估',
     riskLevel: normalizeRiskLevel(
       record.riskLevel ?? record.risk_level ?? record.risk,
     ),
@@ -503,69 +503,69 @@ function normalizeSolution(
 
 function buildSolutionPrompt(project: Project) {
   const system = [
-    "你是资深硬件系统方案架构师。",
-    "输出严格合法JSON，无Markdown代码块，无注释，紧凑格式。",
-    "必须输出3个方案，差异明显（主控选型/供电/通信/成本/功耗/扩展性）。",
-    "每方案覆盖：供电、主控、传感/执行、通信、接口、存储、调试、保护。",
-    "",
-    "数量约束：modules=6-8 edges=8-12 milestones=3 highlights<=5 tradeoffs<=4 assumptions<=3",
-    "",
-    "【关键】architectureL1必须与modules建立层次映射关系：",
-    "1. 先在modules中定义功能模块(如'电源模块'id='M_POWER','主控模块'id='M_MCU')",
-    "2. 在architectureL1.nodes中，具体器件的parentId必须指向所属模块ID",
-    "   示例：{id:'U1',label:'AMS1117',nodeType:'submodule',parentId:'M_POWER'}",
-    "3. Group节点(nodeType='group')代表模块边界，id必须与module.id一致",
-    "   示例：{id:'M_POWER',label:'电源模块',nodeType:'group',summary:'5V转3.3V'}",
-    "",
-    "architectureL1结构(nodes=12-20 edges=15-25)：",
-    "- Group节点(4-6个)：对应modules，无ports字段",
-    "- Submodule节点(8-14个)：具体芯片/器件，必须有parentId和ports",
-    "- 每个submodule节点ports=2-6个",
-    "",
-    "必须包含的Group及其Submodule：",
-    "1. 电源模块(M_POWER)：USB接口、LDO芯片、滤波电容",
-    "2. 主控模块(M_MCU)：MCU芯片、晶振、复位电路",
-    "3. 通信模块(M_COMM)：UART接口、USB_DM/DP",
-    "4. 调试模块(M_DEBUG)：SWD接口、调试连接器",
-    "",
-    "端口方向规则：",
-    "  in=信号进入(VDD/RX) out=信号输出(VOUT/TX) bidirectional=双向(SDA/SWDIO)",
-    "",
-    "【rdWorkflow 研发工作流生成规则】",
-    "数量约束：lanes=3-5 nodes=6-12 edges=6-14 gates=1-3",
-    "",
-    "必须包含的泳道(3-5个)：",
-    "1. 硬件设计(L_HW)：需求分析、原理图、PCB、器件选型",
-    "2. 软件开发(L_SW)：BSP/驱动、固件、应用程序",
-    "3. 测试验证(L_TEST)：功能测试、可靠性测试、认证",
-    "4. 项目管理(L_PM)：可选，评审、门禁管理",
-    "5. 供应链(L_SCM)：可选，器件采购、生产准备",
-    "",
-    "节点设计要求：",
-    "- 必须覆盖完整周期：需求→设计→开发→测试→验收",
-    "- 每个节点必须有具体交付物(outputs)和明确验收标准(acceptance)",
-    "- 必须指定ownerRole(如'硬件工程师'、'软件工程师')和durationEstimate(如'3天'、'1周')",
-    "- 节点命名要具体：避免'设计'，使用'原理图设计'、'PCB Layout'、'驱动开发'",
-    "",
-    "边(依赖关系)设计：",
-    "- relation可选值：depends_on(依赖), produces(产出), verifies(验证)",
-    "- 必须有跨泳道协作边，体现硬件-软件-测试的配合",
-    "- 示例：原理图→PCB(produces)、PCB+固件→功能测试(depends_on)",
-    "",
-    "门禁(Gates)设计：",
-    "- 至少1个关键评审门禁(如EVT、DVT、PVT)",
-    "- 每个门禁必须包含criteria(验收标准)和evidence(证据材料)",
-    "- 示例：EVT门禁→criteria=['原理图评审通过','关键器件确认']",
-    "",
-    "openQuestions<=8 wireframes<=6 flow/ia各<=200字",
-  ].join("");
+    '你是资深硬件系统方案架构师。',
+    '输出严格合法JSON，无Markdown代码块，无注释，紧凑格式。',
+    '必须输出3个方案，差异明显（主控选型/供电/通信/成本/功耗/扩展性）。',
+    '每方案覆盖：供电、主控、传感/执行、通信、接口、存储、调试、保护。',
+    '',
+    '数量约束：modules=6-8 edges=8-12 milestones=3 highlights<=5 tradeoffs<=4 assumptions<=3',
+    '',
+    '【关键】architectureL1必须与modules建立层次映射关系：',
+    '1. 先在modules中定义功能模块(如\'电源模块\'id=\'M_POWER\',\'主控模块\'id=\'M_MCU\')',
+    '2. 在architectureL1.nodes中，具体器件的parentId必须指向所属模块ID',
+    '   示例：{id:\'U1\',label:\'AMS1117\',nodeType:\'submodule\',parentId:\'M_POWER\'}',
+    '3. Group节点(nodeType=\'group\')代表模块边界，id必须与module.id一致',
+    '   示例：{id:\'M_POWER\',label:\'电源模块\',nodeType:\'group\',summary:\'5V转3.3V\'}',
+    '',
+    'architectureL1结构(nodes=12-20 edges=15-25)：',
+    '- Group节点(4-6个)：对应modules，无ports字段',
+    '- Submodule节点(8-14个)：具体芯片/器件，必须有parentId和ports',
+    '- 每个submodule节点ports=2-6个',
+    '',
+    '必须包含的Group及其Submodule：',
+    '1. 电源模块(M_POWER)：USB接口、LDO芯片、滤波电容',
+    '2. 主控模块(M_MCU)：MCU芯片、晶振、复位电路',
+    '3. 通信模块(M_COMM)：UART接口、USB_DM/DP',
+    '4. 调试模块(M_DEBUG)：SWD接口、调试连接器',
+    '',
+    '端口方向规则：',
+    '  in=信号进入(VDD/RX) out=信号输出(VOUT/TX) bidirectional=双向(SDA/SWDIO)',
+    '',
+    '【rdWorkflow 研发工作流生成规则】',
+    '数量约束：lanes=3-5 nodes=6-12 edges=6-14 gates=1-3',
+    '',
+    '必须包含的泳道(3-5个)：',
+    '1. 硬件设计(L_HW)：需求分析、原理图、PCB、器件选型',
+    '2. 软件开发(L_SW)：BSP/驱动、固件、应用程序',
+    '3. 测试验证(L_TEST)：功能测试、可靠性测试、认证',
+    '4. 项目管理(L_PM)：可选，评审、门禁管理',
+    '5. 供应链(L_SCM)：可选，器件采购、生产准备',
+    '',
+    '节点设计要求：',
+    '- 必须覆盖完整周期：需求→设计→开发→测试→验收',
+    '- 每个节点必须有具体交付物(outputs)和明确验收标准(acceptance)',
+    '- 必须指定ownerRole(如\'硬件工程师\'、\'软件工程师\')和durationEstimate(如\'3天\'、\'1周\')',
+    '- 节点命名要具体：避免\'设计\'，使用\'原理图设计\'、\'PCB Layout\'、\'驱动开发\'',
+    '',
+    '边(依赖关系)设计：',
+    '- relation可选值：depends_on(依赖), produces(产出), verifies(验证)',
+    '- 必须有跨泳道协作边，体现硬件-软件-测试的配合',
+    '- 示例：原理图→PCB(produces)、PCB+固件→功能测试(depends_on)',
+    '',
+    '门禁(Gates)设计：',
+    '- 至少1个关键评审门禁(如EVT、DVT、PVT)',
+    '- 每个门禁必须包含criteria(验收标准)和evidence(证据材料)',
+    '- 示例：EVT门禁→criteria=[\'原理图评审通过\',\'关键器件确认\']',
+    '',
+    'openQuestions<=8 wireframes<=6 flow/ia各<=200字',
+  ].join('');
 
   const user = [
-    `需求：${project.requirementsText || "无"}`,
-    `补充：${project.description || "无"}`,
-    "",
-    "输出JSON结构(紧凑，无注释，无```json)：",
-    "{",
+    `需求：${project.requirementsText || '无'}`,
+    `补充：${project.description || '无'}`,
+    '',
+    '输出JSON结构(紧凑，无注释，无```json)：',
+    '{',
     '  "assumptions":["假设1","假设2"],',
     '  "solutions":[{',
     '    "id":"S1","name":"方案名","positioning":"高性价比|均衡|高扩展",',
@@ -643,10 +643,10 @@ function buildSolutionPrompt(project: Project) {
     '    "openQuestions":[]',
     '  }]',
     '}',
-    "",
-    "【关键】每个module必须在architectureL1中有对应的group节点(id相同)，该group下包含具体器件(parentId指向group)",
-    "type可选值: power bus io rf net debug",
-  ].join("\n");
+    '',
+    '【关键】每个module必须在architectureL1中有对应的group节点(id相同)，该group下包含具体器件(parentId指向group)',
+    'type可选值: power bus io rf net debug',
+  ].join('\n');
 
   return { system, user };
 }
@@ -663,9 +663,9 @@ function convertSolutionModulesToCatalog(
       (input, index) => ({
         id: `input_${index}`,
         name: input,
-        kind: "io" as const,
-        direction: "in" as const,
-        io: "gpio" as const,
+        kind: 'io' as const,
+        direction: 'in' as const,
+        io: 'gpio' as const,
       }),
     );
 
@@ -674,16 +674,16 @@ function convertSolutionModulesToCatalog(
       (output, index) => ({
         id: `output_${index}`,
         name: output,
-        kind: "io" as const,
-        direction: "out" as const,
-        io: "gpio" as const,
+        kind: 'io' as const,
+        direction: 'out' as const,
+        io: 'gpio' as const,
       }),
     );
 
     return {
       id: module.id,
       name: module.name,
-      category: "other" as const,
+      category: 'other' as const,
       ports: [...inputPorts, ...outputPorts],
     };
   });
@@ -696,20 +696,12 @@ function convertSolutionToWorkflow(
   solution: ProjectSolution,
   moduleCatalog: WorkflowModuleDefinition[],
 ): Workflow {
-  console.log("🔄 开始转换方案为Workflow:", solution.name);
-  console.log("🔄 方案模块数:", solution.modules?.length);
-  console.log("🔄 方案连接数:", solution.edges?.length);
-
-  console.log("🔄 使用的模块目录:", moduleCatalog);
-
   // 1. 将 SolutionModule 转换为 WorkflowNode
   const nodes: WorkflowNode[] = (solution.modules ?? []).map((module) => ({
     id: module.id,
     moduleId: module.id,
     label: module.name,
   }));
-
-  console.log("🔄 转换后的nodes:", nodes);
 
   // 2. 将 SolutionEdge 转换为 WorkflowConnection
   const connections: WorkflowConnection[] = (solution.edges ?? []).map(
@@ -719,29 +711,25 @@ function convertSolutionToWorkflow(
       const targetModule = moduleCatalog.find((m) => m.id === edge.target);
 
       // 使用第一个输出端口和第一个输入端口
-      const sourcePort = sourceModule?.ports.find((p) => p.direction === "out");
-      const targetPort = targetModule?.ports.find((p) => p.direction === "in");
+      const sourcePort = sourceModule?.ports.find((p) => p.direction === 'out');
+      const targetPort = targetModule?.ports.find((p) => p.direction === 'in');
 
       const connection = {
         id: createId(`conn_${index}`),
         from: {
           nodeId: edge.source,
-          portId: sourcePort?.id ?? "output_0",
+          portId: sourcePort?.id ?? 'output_0',
         },
         to: {
           nodeId: edge.target,
-          portId: targetPort?.id ?? "input_0",
+          portId: targetPort?.id ?? 'input_0',
         },
       };
-      console.log("🔄 转换连接:", edge.source, "->", edge.target, connection);
       return connection;
     },
   );
 
-  console.log("🔄 转换后的connections:", connections);
-
   const workflow = { nodes, connections };
-  console.log("✅ 转换完成的workflow:", workflow);
 
   return workflow;
 }
@@ -760,35 +748,35 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={[
-        "px-4 py-2 rounded-lg font-medium transition-colors",
+        'px-4 py-2 rounded-lg font-medium transition-colors',
         active
-          ? "bg-bg-secondary text-text-primary"
-          : "text-text-secondary hover:bg-bg-secondary",
-      ].join(" ")}
+          ? 'bg-bg-secondary text-text-primary'
+          : 'text-text-secondary hover:bg-bg-secondary',
+      ].join(' ')}
     >
       {children}
     </button>
   );
 }
 
-function ProjectNotFound({ onBack }: { onBack: () => void }) {
+function ProjectNotFound({ onBack, t }: { onBack: () => void; t: any }) {
   return (
     <div className="bg-white rounded-2xl shadow-card p-10 text-center">
       <div className="text-4xl mb-3 text-text-secondary">
         <i className="fas fa-exclamation-triangle"></i>
       </div>
       <div className="text-lg font-semibold text-text-primary mb-1">
-        项目不存在或已被删除
+        {t('project_detail.not_found_title')}
       </div>
       <div className="text-sm text-text-secondary mb-6">
-        你可以返回项目列表，或者新建一个项目。
+        {t('project_detail.not_found_desc')}
       </div>
       <button
         type="button"
         onClick={onBack}
         className="bg-gradient-primary text-white px-6 py-3 rounded-lg font-medium hover:shadow-glow transition-all duration-300"
       >
-        返回项目列表
+        {t('project_detail.btn_back_to_list')}
       </button>
     </div>
   );
@@ -858,7 +846,7 @@ function WorkflowSummary({ project }: { project: Project }) {
                     </div>
                   </div>
                   <span className="text-xs text-text-secondary">
-                    {moduleDef?.category ?? "other"}
+                    {moduleDef?.category ?? 'other'}
                   </span>
                 </li>
               );
@@ -879,19 +867,19 @@ function WorkflowSummary({ project }: { project: Project }) {
               <li key={issue.id} className="p-6 flex items-start space-x-3">
                 <span
                   className={[
-                    "mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs text-white flex-shrink-0",
-                    issue.severity === "error"
-                      ? "bg-danger"
-                      : issue.severity === "warning"
-                        ? "bg-warning"
-                        : "bg-info",
-                  ].join(" ")}
+                    'mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs text-white flex-shrink-0',
+                    issue.severity === 'error'
+                      ? 'bg-danger'
+                      : issue.severity === 'warning'
+                        ? 'bg-warning'
+                        : 'bg-info',
+                  ].join(' ')}
                 >
-                  {issue.severity === "error"
-                    ? "!"
-                    : issue.severity === "warning"
-                      ? "⚠"
-                      : "i"}
+                  {issue.severity === 'error'
+                    ? '!'
+                    : issue.severity === 'warning'
+                      ? '⚠'
+                      : 'i'}
                 </span>
                 <div className="text-sm text-text-primary">{issue.message}</div>
               </li>
@@ -906,10 +894,10 @@ function WorkflowSummary({ project }: { project: Project }) {
 const ProjectDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("projectId") ?? "";
-  const action = searchParams.get("action");
-  const [activeTab, setActiveTab] = useState<TabKey>("workflow");
-  const [refreshToken, setRefreshToken] = useState(0);
+  const projectId = searchParams.get('projectId') ?? '';
+  const action = searchParams.get('action');
+  const [activeTab, setActiveTab] = useState<TabKey>('workflow');
+  const [project, setProject] = useState(() => getProjectById(projectId));
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [solutions, setSolutions] = useState<ProjectSolution[]>([]);
@@ -917,31 +905,22 @@ const ProjectDetailPage: React.FC = () => {
     null,
   );
   const [archViewTab, setArchViewTab] = useState<'l1' | 'workflow' | 'legacy'>('legacy');
-  const hasAutoGeneratedRef = useRef(false);
+  const isGeneratingRef = useRef(false);
+  const reloadProject = useCallback(() => {
+    setProject(getProjectById(projectId));
+  }, [projectId]);
 
-  const project = useMemo(
-    () => getProjectById(projectId),
-    [projectId, refreshToken],
-  );
+  useEffect(() => {
+    reloadProject();
+  }, [reloadProject]);
 
   useEffect(() => {
     if (!project) {
-      console.log("⚠️ project 不存在，清空 solutions");
       setSolutions([]);
       setSelectedSolutionId(null);
       return;
     }
     const nextSolutions = project.solutions ?? [];
-    console.log(
-      "🔄 useEffect 触发: project.solutions.length =",
-      nextSolutions.length,
-    );
-    if (nextSolutions.length > 0) {
-      console.log(
-        "🔄 第一个方案的模块数量:",
-        nextSolutions[0]?.modules?.length,
-      );
-    }
     setSolutions(nextSolutions);
     setSelectedSolutionId(nextSolutions[0]?.id ?? null);
   }, [project]);
@@ -950,77 +929,78 @@ const ProjectDetailPage: React.FC = () => {
     if (!project) {
       return;
     }
-    if (!confirm("确定要删除这个项目吗？此操作不可撤销。")) {
+    if (!confirm('确定要删除这个项目吗？此操作不可撤销。')) {
       return;
     }
     deleteProject(project.id);
-    navigate("/project-list");
+    navigate('/project-list');
   };
 
-  const handleSetStatus = (nextStatus: Project["status"]) => {
+  const handleSetStatus = (nextStatus: Project['status']) => {
     if (!project) {
       return;
     }
     setProjectStatus(project.id, nextStatus);
-    setRefreshToken((v) => v + 1);
+    reloadProject();
   };
 
   const handleGenerateSolutions = useCallback(async () => {
-    if (!project) {
+    if (!project || isGeneratingRef.current) {
       return;
     }
+    isGeneratingRef.current = true;
     const config = loadAiConfig();
     if (!config || !config.baseUrl || !config.apiKey || !config.model) {
-      setGenerateError("请先在用户设置中完成 AI 算力配置");
-      setProjectStatus(project.id, "draft");
-      setRefreshToken((v) => v + 1);
+      setGenerateError('请先在用户设置中完成 AI 算力配置');
+      setProjectStatus(project.id, 'draft');
+      reloadProject();
+      isGeneratingRef.current = false;
       return;
     }
     setGenerateError(null);
     setIsGenerating(true);
-    setProjectStatus(project.id, "generating");
-    setRefreshToken((v) => v + 1);
+    setProjectStatus(project.id, 'generating');
+    reloadProject();
 
     try {
       const endpoint = buildEndpoint(config.baseUrl, config.provider);
       const { system, user } = buildSolutionPrompt(project);
       const response = await fetch(endpoint, {
-        method: "POST",
+        method: 'POST',
         headers:
-          config.provider === "openai"
+          config.provider === 'openai'
             ? {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${config.apiKey}`,
-              }
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${config.apiKey}`,
+            }
             : {
-                "Content-Type": "application/json",
-                "x-api-key": config.apiKey,
-                "anthropic-version": "2023-06-01",
-              },
+              'Content-Type': 'application/json',
+              'x-api-key': config.apiKey,
+              'anthropic-version': '2023-06-01',
+            },
         body:
-          config.provider === "openai"
+          config.provider === 'openai'
             ? JSON.stringify({
-                model: config.model,
-                temperature: config.temperature ?? 0.2,
-                messages: [
-                  { role: "system", content: system },
-                  { role: "user", content: user },
-                ],
-              })
+              model: config.model,
+              temperature: config.temperature ?? 0.2,
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: user },
+              ],
+            })
             : JSON.stringify({
-                model: config.model,
-                temperature: config.temperature ?? 0.2,
-                max_tokens: 16000,
-                system,
-                messages: [{ role: "user", content: user }],
-              }),
+              model: config.model,
+              temperature: config.temperature ?? 0.2,
+              max_tokens: 16000,
+              system,
+              messages: [{ role: 'user', content: user }],
+            }),
       });
 
       if (!response.ok) {
         throw new Error(`请求失败：${response.status}`);
       }
       const data = await response.json();
-      console.log("🔍 AI 原始返回数据:", data);
 
       const dataRecord = toRecord(data);
       const hasStructuredPayload =
@@ -1028,28 +1008,21 @@ const ProjectDetailPage: React.FC = () => {
         (Array.isArray(dataRecord.solutions) ||
           Array.isArray(dataRecord.assumptions));
       const rawText = extractTextByProvider(config.provider, data);
-      console.log("📝 提取的文本内容:", rawText.substring(0, 500) + "...");
 
       if (!hasStructuredPayload && !rawText.trim()) {
-        throw new Error("AI 返回内容为空");
+        throw new Error('AI 返回内容为空');
       }
       const jsonText = hasStructuredPayload
-        ? ""
+        ? ''
         : extractJsonPayload(String(rawText));
-      console.log(
-        "🔧 去除 Markdown 后的 JSON:",
-        jsonText.substring(0, 500) + "...",
-      );
-
       let parsed: unknown;
       try {
         parsed = hasStructuredPayload
           ? dataRecord
           : parseJsonWithRepair(jsonText);
-        console.log("✅ 解析后的对象:", parsed);
       } catch (_error) {
-        console.error("❌ JSON 解析失败:", _error);
-        throw new Error("解析返回内容失败，请检查模型输出格式");
+        console.error('❌ JSON 解析失败:', _error);
+        throw new Error('解析返回内容失败，请检查模型输出格式');
       }
       const parsedObject = Array.isArray(parsed)
         ? undefined
@@ -1063,19 +1036,15 @@ const ProjectDetailPage: React.FC = () => {
         parsedObject && Array.isArray(parsedObject.assumptions)
           ? (parsedObject.assumptions as string[])
           : [];
-      console.log("📋 解析到的方案数量:", parsedSolutions.length);
-
       if (parsedSolutions.length === 0) {
-        throw new Error("未解析到方案结果");
+        throw new Error('未解析到方案结果');
       }
 
       const now = Date.now();
-      console.log("🔄 开始标准化方案数据...");
 
       const nextSolutions: ProjectSolution[] = [];
       for (let index = 0; index < Math.min(3, parsedSolutions.length); index++) {
         try {
-          console.log(`🔄 标准化第 ${index + 1} 个方案...`);
           const normalized = normalizeSolution(
             parsedSolutions[index],
             index,
@@ -1083,7 +1052,6 @@ const ProjectDetailPage: React.FC = () => {
             now
           );
           nextSolutions.push(normalized);
-          console.log(`✅ 第 ${index + 1} 个方案标准化成功`);
         } catch (err) {
           console.error(`❌ 第 ${index + 1} 个方案标准化失败:`, err);
           console.error('❌ 错误堆栈:', err instanceof Error ? err.stack : 'No stack trace');
@@ -1092,52 +1060,43 @@ const ProjectDetailPage: React.FC = () => {
         }
       }
 
-      console.log("🎯 开始保存方案数据，共", nextSolutions.length, "个方案");
-      console.log(
-        "🎯 第一个方案的模块数量:",
-        nextSolutions[0]?.modules?.length,
-      );
-
-      // 1. 先保存到 localStorage（持久化）
       setProjectSolutions(project.id, nextSolutions);
-      setProjectStatus(project.id, "draft");
-
-      console.log("✅ 已保存到 localStorage");
-
-      // 2. 立即更新本地 React 状态（确保界面立即显示）
+      setProjectStatus(project.id, 'draft');
       setSolutions(nextSolutions);
       setSelectedSolutionId(nextSolutions[0]?.id ?? null);
-
-      console.log(
-        "✅ 已更新 React 状态, solutions.length =",
-        nextSolutions.length,
-      );
-
-      console.log("✅ 方案生成完成");
+      reloadProject();
     } catch (error) {
-      console.error("❌❌❌ 外层捕获到错误:", error);
-      console.error("❌❌❌ 错误类型:", typeof error);
-      console.error("❌❌❌ 错误消息:", error instanceof Error ? error.message : String(error));
-      console.error("❌❌❌ 错误堆栈:", error instanceof Error ? error.stack : "无堆栈信息");
-      setGenerateError(error instanceof Error ? error.message : "生成失败");
-      setProjectStatus(project.id, "draft");
-      setRefreshToken((v) => v + 1);
+      console.error('方案生成失败:', error);
+      setGenerateError(error instanceof Error ? error.message : '生成失败');
+      setProjectStatus(project.id, 'draft');
+      reloadProject();
     } finally {
       setIsGenerating(false);
+      isGeneratingRef.current = false;
     }
-  }, [project]);
+  }, [project, reloadProject]);
 
   useEffect(() => {
     if (!project) {
       return;
     }
-    if (action !== "generate") {
+    if (action !== 'generate') {
       return;
     }
-    if (hasAutoGeneratedRef.current || solutions.length > 0 || isGenerating) {
+    const autoGenerateLockKey = `pcbtool.auto-generate.${project.id}`;
+    if (
+      typeof window !== 'undefined' &&
+      window.sessionStorage.getItem(autoGenerateLockKey) === 'done'
+    ) {
+      navigate(`/project-detail?projectId=${project.id}`, { replace: true });
       return;
     }
-    hasAutoGeneratedRef.current = true;
+    if (solutions.length > 0 || isGenerating) {
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(autoGenerateLockKey, 'done');
+    }
     navigate(`/project-detail?projectId=${project.id}`, { replace: true });
     handleGenerateSolutions();
   }, [
@@ -1163,29 +1122,13 @@ const ProjectDetailPage: React.FC = () => {
     [selectedSolution, solutionModuleCatalog],
   );
 
-  // 调试信息
-  useEffect(() => {
-    console.log("📊 当前状态:", {
-      "solutions.length": solutions.length,
-      selectedSolutionId: selectedSolutionId,
-      selectedSolution: selectedSolution
-        ? {
-            id: selectedSolution.id,
-            name: selectedSolution.name,
-            modulesCount: selectedSolution.modules?.length ?? 0,
-          }
-        : null,
-      isGenerating: isGenerating,
-    });
-  }, [solutions, selectedSolutionId, selectedSolution, isGenerating]);
-
   return (
     <AppShell
       pageTitle="项目详情"
-      breadcrumb={["工作台", "项目管理", "项目详情"]}
+      breadcrumb={['工作台', '项目管理', '项目详情']}
     >
       {!project ? (
-        <ProjectNotFound onBack={() => navigate("/project-list")} />
+        <ProjectNotFound onBack={() => navigate('/project-list')} />
       ) : (
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-card p-6">
@@ -1200,7 +1143,7 @@ const ProjectDetailPage: React.FC = () => {
                       {project.name}
                     </div>
                     <div className="text-sm text-text-secondary truncate">
-                      {project.description || "—"}
+                      {project.description || '—'}
                     </div>
                   </div>
                 </div>
@@ -1222,14 +1165,14 @@ const ProjectDetailPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSetStatus("in_progress")}
+                  onClick={() => handleSetStatus('in_progress')}
                   className="px-4 py-2 bg-warning bg-opacity-10 text-warning border border-warning border-opacity-20 rounded-lg font-medium hover:bg-opacity-20 transition-colors"
                 >
                   标记进行中
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSetStatus("completed")}
+                  onClick={() => handleSetStatus('completed')}
                   className="px-4 py-2 bg-success bg-opacity-10 text-success border border-success border-opacity-20 rounded-lg font-medium hover:bg-opacity-20 transition-colors"
                 >
                   标记已完成
@@ -1247,39 +1190,39 @@ const ProjectDetailPage: React.FC = () => {
 
           <div className="flex flex-wrap gap-2">
             <TabButton
-              active={activeTab === "workflow"}
-              onClick={() => setActiveTab("workflow")}
+              active={activeTab === 'workflow'}
+              onClick={() => setActiveTab('workflow')}
             >
               模块工作流
             </TabButton>
             <TabButton
-              active={activeTab === "requirements"}
-              onClick={() => setActiveTab("requirements")}
+              active={activeTab === 'requirements'}
+              onClick={() => setActiveTab('requirements')}
             >
               文本需求
             </TabButton>
             <TabButton
-              active={activeTab === "schemes"}
-              onClick={() => setActiveTab("schemes")}
+              active={activeTab === 'schemes'}
+              onClick={() => setActiveTab('schemes')}
             >
               方案输出
             </TabButton>
           </div>
 
-          {activeTab === "workflow" && <WorkflowSummary project={project} />}
+          {activeTab === 'workflow' && <WorkflowSummary project={project} />}
 
-          {activeTab === "requirements" && (
+          {activeTab === 'requirements' && (
             <div className="bg-white rounded-2xl shadow-card p-6">
               <div className="font-semibold text-text-primary mb-3">
                 需求描述
               </div>
               <pre className="whitespace-pre-wrap text-sm text-text-primary bg-bg-secondary rounded-lg p-4 border border-border-primary">
-                {project.requirementsText || "—"}
+                {project.requirementsText || '—'}
               </pre>
             </div>
           )}
 
-          {activeTab === "schemes" && (
+          {activeTab === 'schemes' && (
             <div className="space-y-6">
               <div className="bg-white rounded-2xl shadow-card p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1298,11 +1241,11 @@ const ProjectDetailPage: React.FC = () => {
                       disabled={isGenerating}
                       className="px-4 py-2 bg-gradient-primary text-white rounded-lg font-medium hover:shadow-glow transition-all duration-300 disabled:opacity-60"
                     >
-                      {isGenerating ? "生成中..." : "生成 3 个方案"}
+                      {isGenerating ? '生成中...' : '生成 3 个方案'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate("/user-profile")}
+                      onClick={() => navigate('/user-profile')}
                       className="px-4 py-2 bg-white border border-border-primary rounded-lg font-medium text-text-primary hover:bg-bg-secondary transition-colors"
                     >
                       配置算力
@@ -1317,12 +1260,7 @@ const ProjectDetailPage: React.FC = () => {
               </div>
 
               {(() => {
-                console.log("🎨 渲染判断:", {
-                  isGenerating,
-                  solutionsLength: solutions.length,
-                });
                 if (isGenerating) {
-                  console.log("🎨 → 渲染: 生成中状态");
                   return (
                     <div className="bg-white rounded-2xl shadow-card p-8 text-center text-text-secondary">
                       <div className="text-4xl mb-3">
@@ -1338,7 +1276,6 @@ const ProjectDetailPage: React.FC = () => {
                   );
                 }
                 if (solutions.length === 0) {
-                  console.log("🎨 → 渲染: 暂无方案");
                   return (
                     <div className="bg-white rounded-2xl shadow-card p-8 text-center text-text-secondary">
                       <div className="text-4xl mb-3">
@@ -1353,21 +1290,6 @@ const ProjectDetailPage: React.FC = () => {
                     </div>
                   );
                 }
-                console.log(
-                  "🎨 → 渲染: 方案列表，共",
-                  solutions.length,
-                  "个方案",
-                );
-                console.log(
-                  "🎨 → selectedSolution:",
-                  selectedSolution
-                    ? {
-                        id: selectedSolution.id,
-                        name: selectedSolution.name,
-                        modulesCount: selectedSolution.modules?.length,
-                      }
-                    : null,
-                );
                 return (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1377,11 +1299,11 @@ const ProjectDetailPage: React.FC = () => {
                           type="button"
                           onClick={() => setSelectedSolutionId(solution.id)}
                           className={[
-                            "text-left bg-white rounded-2xl shadow-card border transition-all p-6",
+                            'text-left bg-white rounded-2xl shadow-card border transition-all p-6',
                             selectedSolution?.id === solution.id
-                              ? "border-primary ring-2 ring-primary ring-opacity-20"
-                              : "border-border-primary hover:border-primary hover:shadow-glow",
-                          ].join(" ")}
+                              ? 'border-primary ring-2 ring-primary ring-opacity-20'
+                              : 'border-border-primary hover:border-primary hover:shadow-glow',
+                          ].join(' ')}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-lg font-semibold text-text-primary">
@@ -1392,7 +1314,7 @@ const ProjectDetailPage: React.FC = () => {
                             </span>
                           </div>
                           <div className="text-sm text-text-secondary mb-4">
-                            {solution.highlights?.[0] ?? "—"}
+                            {solution.highlights?.[0] ?? '—'}
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-xs text-text-secondary">
                             <div>
@@ -1420,353 +1342,336 @@ const ProjectDetailPage: React.FC = () => {
 
                     {selectedSolution && (
                       <div className="bg-white rounded-2xl shadow-card p-6 space-y-6">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                              <div>
-                                <div className="text-xl font-semibold text-text-primary">
-                                  {selectedSolution.name}
-                                </div>
-                                <div className="text-sm text-text-secondary">
-                                  {selectedSolution.positioning}
-                                </div>
-                              </div>
-                              <div className="text-sm text-text-secondary">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="text-xl font-semibold text-text-primary">
+                              {selectedSolution.name}
+                            </div>
+                            <div className="text-sm text-text-secondary">
+                              {selectedSolution.positioning}
+                            </div>
+                          </div>
+                          <div className="text-sm text-text-secondary">
                                 生成时间：
-                                {formatDateTime(selectedSolution.generatedAtMs)}
-                              </div>
-                            </div>
+                            {formatDateTime(selectedSolution.generatedAtMs)}
+                          </div>
+                        </div>
 
-                            {/* 方案统计指标 - 包含模块数和连接数 */}
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                              <div className="bg-bg-secondary rounded-lg p-4">
-                                <div className="text-xs text-text-secondary mb-1">
+                        {/* 方案统计指标 - 包含模块数和连接数 */}
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                          <div className="bg-bg-secondary rounded-lg p-4">
+                            <div className="text-xs text-text-secondary mb-1">
                                   模块数
-                                </div>
-                                <div className="text-2xl font-bold text-text-primary">
-                                  {selectedSolution.modules?.length ?? 0}
-                                </div>
-                              </div>
-                              <div className="bg-bg-secondary rounded-lg p-4">
-                                <div className="text-xs text-text-secondary mb-1">
+                            </div>
+                            <div className="text-2xl font-bold text-text-primary">
+                              {selectedSolution.modules?.length ?? 0}
+                            </div>
+                          </div>
+                          <div className="bg-bg-secondary rounded-lg p-4">
+                            <div className="text-xs text-text-secondary mb-1">
                                   连接数
-                                </div>
-                                <div className="text-2xl font-bold text-text-primary">
-                                  {selectedSolution.edges?.length ?? 0}
-                                </div>
-                              </div>
-                              <div className="bg-bg-secondary rounded-lg p-4">
-                                <div className="text-xs text-text-secondary mb-1">
+                            </div>
+                            <div className="text-2xl font-bold text-text-primary">
+                              {selectedSolution.edges?.length ?? 0}
+                            </div>
+                          </div>
+                          <div className="bg-bg-secondary rounded-lg p-4">
+                            <div className="text-xs text-text-secondary mb-1">
                                   成本区间
-                                </div>
-                                <div className="text-sm font-semibold text-text-primary">
-                                  {selectedSolution.costRange}
-                                </div>
-                              </div>
-                              <div className="bg-bg-secondary rounded-lg p-4">
-                                <div className="text-xs text-text-secondary mb-1">
+                            </div>
+                            <div className="text-sm font-semibold text-text-primary">
+                              {selectedSolution.costRange}
+                            </div>
+                          </div>
+                          <div className="bg-bg-secondary rounded-lg p-4">
+                            <div className="text-xs text-text-secondary mb-1">
                                   周期区间
-                                </div>
-                                <div className="text-sm font-semibold text-text-primary">
-                                  {selectedSolution.durationRange}
-                                </div>
-                              </div>
-                              <div className="bg-bg-secondary rounded-lg p-4">
-                                <div className="text-xs text-text-secondary mb-1">
+                            </div>
+                            <div className="text-sm font-semibold text-text-primary">
+                              {selectedSolution.durationRange}
+                            </div>
+                          </div>
+                          <div className="bg-bg-secondary rounded-lg p-4">
+                            <div className="text-xs text-text-secondary mb-1">
                                   风险等级
-                                </div>
-                                <div className="text-sm font-semibold text-text-primary">
-                                  {formatRiskLabel(selectedSolution.riskLevel)}
-                                </div>
-                              </div>
                             </div>
+                            <div className="text-sm font-semibold text-text-primary">
+                              {formatRiskLabel(selectedSolution.riskLevel)}
+                            </div>
+                          </div>
+                        </div>
 
-                            {/* 系统架构与工作流 - 新增三个 Tab */}
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
+                        {/* 系统架构与工作流 - 新增三个 Tab */}
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
                                 系统架构与研发工作流
-                              </div>
+                          </div>
 
-                              {/* Tab 切换 */}
-                              <div className="border-b border-border-primary">
-                                <div className="flex gap-4">
-                                  <button
-                                    type="button"
-                                    onClick={() => setArchViewTab('legacy')}
-                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                      archViewTab === 'legacy'
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                                    }`}
-                                  >
+                          {/* Tab 切换 */}
+                          <div className="border-b border-border-primary">
+                            <div className="flex gap-4">
+                              <button
+                                type="button"
+                                onClick={() => setArchViewTab('legacy')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                  archViewTab === 'legacy'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                                }`}
+                              >
                                     系统架构
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setArchViewTab('l1')}
-                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                      archViewTab === 'l1'
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                                    }`}
-                                  >
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setArchViewTab('l1')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                  archViewTab === 'l1'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                                }`}
+                              >
                                     L1 详细连接
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setArchViewTab('workflow')}
-                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                      archViewTab === 'workflow'
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-text-secondary hover:text-text-primary'
-                                    }`}
-                                  >
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setArchViewTab('workflow')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                  archViewTab === 'workflow'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                                }`}
+                              >
                                     研发工作流
-                                  </button>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Tab 内容 */}
+                          <div className="border border-border-primary rounded-lg overflow-hidden h-[600px] bg-gray-50">
+                            {archViewTab === 'legacy' && (
+                              <WorkflowGraph
+                                workflow={solutionWorkflow}
+                                moduleCatalog={solutionModuleCatalog}
+                              />
+                            )}
+
+                            {archViewTab === 'l1' && selectedSolution.architectureL1 ? (
+                              <L1Graph data={selectedSolution.architectureL1} />
+                            ) : archViewTab === 'l1' ? (
+                              <div className="flex items-center justify-center h-full text-text-secondary">
+                                <div className="text-center">
+                                  <i className="fas fa-info-circle text-4xl mb-3"></i>
+                                  <div>此方案暂无 L1 详细连接图数据</div>
+                                  <div className="text-xs mt-2">请重新生成方案以获取完整数据</div>
                                 </div>
                               </div>
+                            ) : null}
 
-                              {/* Tab 内容 */}
-                              <div className="border border-border-primary rounded-lg overflow-hidden h-[600px] bg-gray-50">
-                                {archViewTab === 'legacy' && (
-                                  <WorkflowGraph
-                                    workflow={solutionWorkflow}
-                                    moduleCatalog={solutionModuleCatalog}
-                                  />
-                                )}
-
-                                {archViewTab === 'l1' && selectedSolution.architectureL1 ? (
-                                  <L1Graph data={selectedSolution.architectureL1} />
-                                ) : archViewTab === 'l1' ? (
-                                  <div className="flex items-center justify-center h-full text-text-secondary">
-                                    <div className="text-center">
-                                      <i className="fas fa-info-circle text-4xl mb-3"></i>
-                                      <div>此方案暂无 L1 详细连接图数据</div>
-                                      <div className="text-xs mt-2">请重新生成方案以获取完整数据</div>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {archViewTab === 'workflow' && selectedSolution.rdWorkflow ? (
-                                  <RDWorkflowGraph data={selectedSolution.rdWorkflow} />
-                                ) : archViewTab === 'workflow' ? (
-                                  <div className="flex items-center justify-center h-full text-text-secondary">
-                                    <div className="text-center">
-                                      <i className="fas fa-info-circle text-4xl mb-3"></i>
-                                      <div>此方案暂无研发工作流数据</div>
-                                      <div className="text-xs mt-2">请重新生成方案以获取完整数据</div>
-                                    </div>
-                                  </div>
-                                ) : null}
+                            {archViewTab === 'workflow' && selectedSolution.rdWorkflow ? (
+                              <RDWorkflowGraph data={selectedSolution.rdWorkflow} />
+                            ) : archViewTab === 'workflow' ? (
+                              <div className="flex items-center justify-center h-full text-text-secondary">
+                                <div className="text-center">
+                                  <i className="fas fa-info-circle text-4xl mb-3"></i>
+                                  <div>此方案暂无研发工作流数据</div>
+                                  <div className="text-xs mt-2">请重新生成方案以获取完整数据</div>
+                                </div>
                               </div>
+                            ) : null}
+                          </div>
 
-                              {/* 开放问题展示 */}
-                              {selectedSolution.openQuestions && selectedSolution.openQuestions.length > 0 && (
-                                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                  <div className="font-semibold text-sm text-yellow-900 mb-2">
-                                    <i className="fas fa-question-circle mr-2"></i>
+                          {/* 开放问题展示 */}
+                          {selectedSolution.openQuestions && selectedSolution.openQuestions.length > 0 && (
+                            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <div className="font-semibold text-sm text-yellow-900 mb-2">
+                                <i className="fas fa-question-circle mr-2"></i>
                                     待确认问题
-                                  </div>
-                                  <div className="space-y-2">
-                                    {selectedSolution.openQuestions.map((q) => (
-                                      <div key={q.id} className="text-sm">
-                                        <div className="text-yellow-900 font-medium">{q.question}</div>
-                                        {q.options && q.options.length > 0 && (
-                                          <div className="flex gap-2 mt-1">
-                                            {q.options.map((opt) => (
-                                              <span key={opt} className="px-2 py-1 bg-white border border-yellow-300 rounded text-xs text-yellow-800">
-                                                {opt}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        )}
+                              </div>
+                              <div className="space-y-2">
+                                {selectedSolution.openQuestions.map((q) => (
+                                  <div key={q.id} className="text-sm">
+                                    <div className="text-yellow-900 font-medium">{q.question}</div>
+                                    {q.options && q.options.length > 0 && (
+                                      <div className="flex gap-2 mt-1">
+                                        {q.options.map((opt) => (
+                                          <span key={opt} className="px-2 py-1 bg-white border border-yellow-300 rounded text-xs text-yellow-800">
+                                            {opt}
+                                          </span>
+                                        ))}
                                       </div>
-                                    ))}
+                                    )}
                                   </div>
-                                </div>
-                              )}
+                                ))}
+                              </div>
                             </div>
+                          )}
+                        </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                              <div className="space-y-3">
-                                <div className="font-semibold text-text-primary">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                            <div className="font-semibold text-text-primary">
                                   亮点
-                                </div>
-                                <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
-                                  {(selectedSolution.highlights ?? []).map(
-                                    (item) => (
-                                      <li key={item}>{item}</li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                              <div className="space-y-3">
-                                <div className="font-semibold text-text-primary">
+                            </div>
+                            <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
+                              {(selectedSolution.highlights ?? []).map(
+                                (item) => (
+                                  <li key={item}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="font-semibold text-text-primary">
                                   取舍
-                                </div>
-                                <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
-                                  {(selectedSolution.tradeoffs ?? []).map(
-                                    (item) => (
-                                      <li key={item}>{item}</li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
                             </div>
+                            <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
+                              {(selectedSolution.tradeoffs ?? []).map(
+                                (item) => (
+                                  <li key={item}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        </div>
 
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
                                 模块清单
+                          </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {(selectedSolution.modules ?? []).map((module) => (
+                              <div
+                                key={module.id}
+                                className="border border-border-primary rounded-lg p-4"
+                              >
+                                <div className="font-medium text-text-primary mb-2">
+                                  {module.name}
+                                </div>
+                                <div className="text-sm text-text-secondary mb-2">
+                                  {module.summary}
+                                </div>
+                                <div className="text-xs text-text-secondary space-y-1">
+                                  <div>
+                                        输入：
+                                    {module.inputs?.join(' / ') || '—'}
+                                  </div>
+                                  <div>
+                                        输出：
+                                    {module.outputs?.join(' / ') || '—'}
+                                  </div>
+                                  <div>
+                                        依赖：
+                                    {module.dependencies?.join(' / ') ||
+                                          '—'}
+                                  </div>
+                                  <div>
+                                        复杂度：{module.complexity}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {(() => {
-                                  console.log(
-                                    "🎨 → 开始渲染模块列表, 模块数量:",
-                                    selectedSolution.modules?.length ?? 0,
-                                  );
-                                  return (selectedSolution.modules ?? []).map(
-                                    (module) => {
-                                      console.log(
-                                        "🎨 → 渲染模块:",
-                                        module.name,
-                                      );
-                                      return (
-                                        <div
-                                          key={module.id}
-                                          className="border border-border-primary rounded-lg p-4"
-                                        >
-                                          <div className="font-medium text-text-primary mb-2">
-                                            {module.name}
-                                          </div>
-                                          <div className="text-sm text-text-secondary mb-2">
-                                            {module.summary}
-                                          </div>
-                                          <div className="text-xs text-text-secondary space-y-1">
-                                            <div>
-                                              输入：
-                                              {module.inputs?.join(" / ") ||
-                                                "—"}
-                                            </div>
-                                            <div>
-                                              输出：
-                                              {module.outputs?.join(" / ") ||
-                                                "—"}
-                                            </div>
-                                            <div>
-                                              依赖：
-                                              {module.dependencies?.join(
-                                                " / ",
-                                              ) || "—"}
-                                            </div>
-                                            <div>
-                                              复杂度：{module.complexity}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    },
-                                  );
-                                })()}
-                              </div>
-                            </div>
+                            ))}
+                          </div>
+                        </div>
 
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
                                 模块连接图
-                              </div>
-                              <div className="border border-border-primary rounded-lg p-4 bg-bg-secondary text-sm text-text-secondary space-y-2">
-                                {(selectedSolution.edges ?? []).length === 0 ? (
-                                  <div>—</div>
-                                ) : (
-                                  selectedSolution.edges.map((edge, index) => (
-                                    <div
-                                      key={`${edge.source}-${edge.target}-${index}`}
-                                    >
-                                      {edge.source} → {edge.target} ·{" "}
-                                      {edge.kind} · {edge.contract}
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
+                          </div>
+                          <div className="border border-border-primary rounded-lg p-4 bg-bg-secondary text-sm text-text-secondary space-y-2">
+                            {(selectedSolution.edges ?? []).length === 0 ? (
+                              <div>—</div>
+                            ) : (
+                              selectedSolution.edges.map((edge, index) => (
+                                <div
+                                  key={`${edge.source}-${edge.target}-${index}`}
+                                >
+                                  {edge.source} → {edge.target} ·{' '}
+                                  {edge.kind} · {edge.contract}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
 
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
                                 里程碑
-                              </div>
-                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                {(selectedSolution.milestones ?? []).map(
-                                  (milestone) => (
-                                    <div
-                                      key={milestone.name}
-                                      className="border border-border-primary rounded-lg p-4"
-                                    >
-                                      <div className="font-medium text-text-primary mb-1">
-                                        {milestone.name}
-                                      </div>
-                                      <div className="text-xs text-text-secondary mb-2">
-                                        {milestone.timeframe}
-                                      </div>
-                                      <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
-                                        {(milestone.deliverables ?? []).map(
-                                          (item) => (
-                                            <li key={item}>{item}</li>
-                                          ),
-                                        )}
-                                      </ul>
-                                    </div>
-                                  ),
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
-                                关键页面与流程
-                              </div>
-                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                <div className="border border-border-primary rounded-lg p-4">
+                          </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            {(selectedSolution.milestones ?? []).map(
+                              (milestone) => (
+                                <div
+                                  key={milestone.name}
+                                  className="border border-border-primary rounded-lg p-4"
+                                >
+                                  <div className="font-medium text-text-primary mb-1">
+                                    {milestone.name}
+                                  </div>
                                   <div className="text-xs text-text-secondary mb-2">
-                                    流程图
+                                    {milestone.timeframe}
                                   </div>
-                                  <div className="text-sm text-text-primary whitespace-pre-wrap">
-                                    {selectedSolution.assets?.flow || "—"}
-                                  </div>
-                                </div>
-                                <div className="border border-border-primary rounded-lg p-4">
-                                  <div className="text-xs text-text-secondary mb-2">
-                                    信息架构
-                                  </div>
-                                  <div className="text-sm text-text-primary whitespace-pre-wrap">
-                                    {selectedSolution.assets?.ia || "—"}
-                                  </div>
-                                </div>
-                                <div className="border border-border-primary rounded-lg p-4">
-                                  <div className="text-xs text-text-secondary mb-2">
-                                    线框图清单
-                                  </div>
-                                  <ul className="text-sm text-text-primary list-disc pl-5 space-y-1">
-                                    {(
-                                      selectedSolution.assets?.wireframes ?? []
-                                    ).map((item) => (
-                                      <li key={item}>{item}</li>
-                                    ))}
+                                  <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
+                                    {(milestone.deliverables ?? []).map(
+                                      (item) => (
+                                        <li key={item}>{item}</li>
+                                      ),
+                                    )}
                                   </ul>
                                 </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
+                                关键页面与流程
+                          </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div className="border border-border-primary rounded-lg p-4">
+                              <div className="text-xs text-text-secondary mb-2">
+                                    流程图
+                              </div>
+                              <div className="text-sm text-text-primary whitespace-pre-wrap">
+                                {selectedSolution.assets?.flow || '—'}
                               </div>
                             </div>
-
-                            <div className="space-y-3">
-                              <div className="font-semibold text-text-primary">
-                                假设清单
+                            <div className="border border-border-primary rounded-lg p-4">
+                              <div className="text-xs text-text-secondary mb-2">
+                                    信息架构
                               </div>
-                              <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
-                                {(selectedSolution.assumptions ?? []).map(
-                                  (item) => (
-                                    <li key={item}>{item}</li>
-                                  ),
-                                )}
+                              <div className="text-sm text-text-primary whitespace-pre-wrap">
+                                {selectedSolution.assets?.ia || '—'}
+                              </div>
+                            </div>
+                            <div className="border border-border-primary rounded-lg p-4">
+                              <div className="text-xs text-text-secondary mb-2">
+                                    线框图清单
+                              </div>
+                              <ul className="text-sm text-text-primary list-disc pl-5 space-y-1">
+                                {(
+                                  selectedSolution.assets?.wireframes ?? []
+                                ).map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
                               </ul>
                             </div>
                           </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="font-semibold text-text-primary">
+                                假设清单
+                          </div>
+                          <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
+                            {(selectedSolution.assumptions ?? []).map(
+                              (item) => (
+                                <li key={item}>{item}</li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      </div>
                     )}
                   </div>
                 );

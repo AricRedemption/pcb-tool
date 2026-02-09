@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AppShell from '../../components/AppShell';
+import { Select } from '../../components/ui/select';
+import { AnimatedAlert } from '../../components/ui/animated-alert';
 import { MODULE_CATALOG } from '../../domain/moduleCatalog';
 import { Project } from '../../domain/project';
 import { Workflow, WorkflowNode, createId, getModuleById } from '../../domain/workflow';
@@ -28,6 +31,7 @@ type SortOrder = 'asc' | 'desc';
 
 const ComponentDatabase: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const projectIdFromQuery = searchParams.get('projectId') ?? undefined;
 
@@ -250,15 +254,26 @@ const ComponentDatabase: React.FC = () => {
   const [projectOptions, setProjectOptions] = useState<Project[]>([]);
   const [targetProjectId, setTargetProjectId] = useState<string>('');
   const [isAddingToProject, setIsAddingToProject] = useState(false);
+  const [alertState, setAlertState] = useState<{ open: boolean; title: string; message: string; type: 'default' | 'destructive' | 'success' | 'warning' | 'info' }>({
+    open: false,
+    title: '',
+    message: '',
+    type: 'default'
+  });
+
+  const showAlert = (message: string, type: 'default' | 'destructive' | 'success' | 'warning' | 'info' = 'default', title: string = '') => {
+    setAlertState({ open: true, title, message, type });
+    setTimeout(() => setAlertState(prev => ({ ...prev, open: false })), 3000);
+  };
 
   const totalCount = filteredComponents.length;
 
   // 设置页面标题
   useEffect(() => {
     const originalTitle = document.title;
-    document.title = '元器件数据库 - PCBTool.AI';
+    document.title = `${t('component_db.page_title')} - PCBTool.AI`;
     return () => { document.title = originalTitle; };
-  }, []);
+  }, [t]);
 
   // 执行搜索和筛选
   const performSearch = () => {
@@ -335,8 +350,8 @@ const ComponentDatabase: React.FC = () => {
   };
 
   // 处理每页条数变化
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newPageSize = parseInt(e.target.value);
+  const handlePageSizeChange = (value: string) => {
+    const newPageSize = parseInt(value);
     setPageSize(newPageSize);
     setCurrentPage(1);
   };
@@ -370,15 +385,14 @@ const ComponentDatabase: React.FC = () => {
     setSelectedComponents(newSelected);
   };
 
-  // 批量删除
   const handleBatchDelete = () => {
     if (selectedComponents.size === 0) return;
-    
-    if (confirm('确定要删除选中的元器件吗？')) {
+
+    if (confirm(t('component_db.confirm_delete'))) {
       const newComponents = filteredComponents.filter(component => !selectedComponents.has(component.id));
       setFilteredComponents(newComponents);
       setSelectedComponents(new Set());
-      alert('删除成功');
+      showAlert(t('component_db.alert_delete_success'), 'success');
     }
   };
 
@@ -441,14 +455,14 @@ const ComponentDatabase: React.FC = () => {
       return;
     }
     if (!targetProjectId) {
-      alert('还没有可用项目，请先创建项目');
-      navigate('/project-create');
+      showAlert(t('component_db.alert_no_project'), 'warning');
+      setTimeout(() => navigate('/project-create'), 1500);
       return;
     }
 
     const project = getProjectById(targetProjectId);
     if (!project) {
-      alert('项目不存在或已被删除');
+      showAlert(t('component_db.alert_project_not_found'), 'destructive');
       return;
     }
 
@@ -457,9 +471,11 @@ const ComponentDatabase: React.FC = () => {
         (c) => c.componentId === selectedComponent.id || c.model === selectedComponent.model,
       ) || (project.requirementsText ?? '').includes(selectedComponent.model);
     if (existsInProject) {
-      alert('该元器件已存在于项目中');
-      closeModal();
-      navigate(`/project-detail?projectId=${project.id}`);
+      showAlert(t('component_db.alert_already_exists'), 'info');
+      setTimeout(() => {
+        closeModal();
+        navigate(`/project-detail?projectId=${project.id}`);
+      }, 1500);
       return;
     }
 
@@ -505,9 +521,11 @@ const ComponentDatabase: React.FC = () => {
         project.id,
       );
 
-      alert(`已添加到项目：${updated.name}`);
-      closeModal();
-      navigate(`/project-detail?projectId=${updated.id}`);
+      showAlert(t('component_db.alert_added_success', { name: updated.name }), 'success');
+      setTimeout(() => {
+        closeModal();
+        navigate(`/project-detail?projectId=${updated.id}`);
+      }, 1500);
     } finally {
       setIsAddingToProject(false);
     }
@@ -602,6 +620,13 @@ const ComponentDatabase: React.FC = () => {
 
   return (
     <AppShell pageTitle="元器件数据库" breadcrumb={['工作台', '知识库', '元器件数据库']}>
+      <AnimatedAlert
+        open={alertState.open}
+        variant={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={() => setAlertState(prev => ({ ...prev, open: false }))}
+      />
 
       {/* 工具栏区域 */}
       <section className="mb-6">
@@ -624,53 +649,62 @@ const ComponentDatabase: React.FC = () => {
               
             {/* 筛选条件 */}
             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-              <select 
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-              >
-                <option value="">全部类型</option>
-                <option value="microcontroller">主控芯片</option>
-                <option value="sensor">传感器</option>
-                <option value="resistor">电阻</option>
-                <option value="capacitor">电容</option>
-                <option value="inductor">电感</option>
-                <option value="diode">二极管</option>
-                <option value="transistor">三极管</option>
-                <option value="ic">集成电路</option>
-                <option value="connector">连接器</option>
-              </select>
-                
-              <select 
-                value={manufacturerFilter}
-                onChange={(e) => setManufacturerFilter(e.target.value)}
-                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-              >
-                <option value="">全部制造商</option>
-                <option value="ti">Texas Instruments</option>
-                <option value="st">STMicroelectronics</option>
-                <option value="nxp">NXP Semiconductors</option>
-                <option value="microchip">Microchip Technology</option>
-                <option value="arduino">Arduino</option>
-                <option value="esp">Espressif Systems</option>
-                <option value="maxim">Maxim Integrated</option>
-                <option value="analog">Analog Devices</option>
-              </select>
-                
-              <select 
-                value={packageFilter}
-                onChange={(e) => setPackageFilter(e.target.value)}
-                className={`px-4 py-3 border border-border-primary rounded-lg ${styles.searchFocus} text-text-primary bg-white`}
-              >
-                <option value="">全部封装</option>
-                <option value="dip">DIP</option>
-                <option value="smd">SMD</option>
-                <option value="qfp">QFP</option>
-                <option value="soic">SOIC</option>
-                <option value="to">TO</option>
-                <option value="sop">SOP</option>
-                <option value="bga">BGA</option>
-              </select>
+              <div className="w-40">
+                <Select
+                  value={typeFilter}
+                  onChange={setTypeFilter}
+                  options={[
+                    { label: '全部类型', value: '' },
+                    { label: '主控芯片', value: 'microcontroller' },
+                    { label: '传感器', value: 'sensor' },
+                    { label: '电阻', value: 'resistor' },
+                    { label: '电容', value: 'capacitor' },
+                    { label: '电感', value: 'inductor' },
+                    { label: '二极管', value: 'diode' },
+                    { label: '三极管', value: 'transistor' },
+                    { label: '集成电路', value: 'ic' },
+                    { label: '连接器', value: 'connector' },
+                  ]}
+                  placeholder="全部类型"
+                />
+              </div>
+
+              <div className="w-48">
+                <Select
+                  value={manufacturerFilter}
+                  onChange={setManufacturerFilter}
+                  options={[
+                    { label: '全部制造商', value: '' },
+                    { label: 'Texas Instruments', value: 'ti' },
+                    { label: 'STMicroelectronics', value: 'st' },
+                    { label: 'NXP Semiconductors', value: 'nxp' },
+                    { label: 'Microchip Technology', value: 'microchip' },
+                    { label: 'Arduino', value: 'arduino' },
+                    { label: 'Espressif Systems', value: 'esp' },
+                    { label: 'Maxim Integrated', value: 'maxim' },
+                    { label: 'Analog Devices', value: 'analog' },
+                  ]}
+                  placeholder="全部制造商"
+                />
+              </div>
+
+              <div className="w-40">
+                <Select
+                  value={packageFilter}
+                  onChange={setPackageFilter}
+                  options={[
+                    { label: '全部封装', value: '' },
+                    { label: 'DIP', value: 'dip' },
+                    { label: 'SMD', value: 'smd' },
+                    { label: 'QFP', value: 'qfp' },
+                    { label: 'SOIC', value: 'soic' },
+                    { label: 'TO', value: 'to' },
+                    { label: 'SOP', value: 'sop' },
+                    { label: 'BGA', value: 'bga' },
+                  ]}
+                  placeholder="全部封装"
+                />
+              </div>
                 
               <button 
                 onClick={performSearch}
@@ -848,16 +882,19 @@ const ComponentDatabase: React.FC = () => {
             {/* 每页条数选择 */}
             <div className="flex items-center space-x-2">
               <span className="text-sm text-text-secondary">每页显示</span>
-              <select 
-                value={pageSize}
-                onChange={handlePageSizeChange}
-                className={`px-3 py-1 border border-border-primary rounded ${styles.searchFocus} text-text-primary bg-white`}
-              >
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
+              <div className="w-20">
+                <Select
+                  value={pageSize.toString()}
+                  onChange={handlePageSizeChange}
+                  options={[
+                    { label: '10', value: '10' },
+                    { label: '20', value: '20' },
+                    { label: '50', value: '50' },
+                    { label: '100', value: '100' },
+                  ]}
+                  placeholder="10"
+                />
+              </div>
               <span className="text-sm text-text-secondary">条</span>
             </div>
               

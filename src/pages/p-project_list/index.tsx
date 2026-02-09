@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AppShell from '../../components/AppShell';
+import { Select } from '../../components/ui/select';
 import { Project, ProjectStatus } from '../../domain/project';
 import { deleteProject, listProjects } from '../../lib/projectsStore';
 
@@ -8,15 +10,6 @@ type StatusOption = {
   value: ProjectStatus | 'all';
   label: string;
 };
-
-const STATUS_OPTIONS: readonly StatusOption[] = [
-  { value: 'all', label: '全部状态' },
-  { value: 'draft', label: '草稿' },
-  { value: 'generating', label: '生成中' },
-  { value: 'in_progress', label: '进行中' },
-  { value: 'completed', label: '已完成' },
-  { value: 'archived', label: '已归档' },
-];
 
 function formatDateTime(ms: number): string {
   const date = new Date(ms);
@@ -28,18 +21,18 @@ function formatDateTime(ms: number): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
 }
 
-function getStatusBadge(status: ProjectStatus): { text: string; className: string } {
+function getStatusBadge(status: ProjectStatus, t: (key: string) => string): { text: string; className: string } {
   switch (status) {
   case 'draft':
-    return { text: '草稿', className: 'bg-bg-secondary text-text-secondary' };
+    return { text: t('project_list.filter_draft'), className: 'bg-bg-secondary text-text-secondary' };
   case 'generating':
-    return { text: '生成中', className: 'bg-info bg-opacity-10 text-info' };
+    return { text: t('project_list.filter_generating'), className: 'bg-info bg-opacity-10 text-info' };
   case 'in_progress':
-    return { text: '进行中', className: 'bg-warning bg-opacity-10 text-warning' };
+    return { text: t('project_list.filter_in_progress'), className: 'bg-warning bg-opacity-10 text-warning' };
   case 'completed':
-    return { text: '已完成', className: 'bg-success bg-opacity-10 text-success' };
+    return { text: t('project_list.filter_completed'), className: 'bg-success bg-opacity-10 text-success' };
   case 'archived':
-    return { text: '已归档', className: 'bg-border-primary text-text-secondary' };
+    return { text: t('project_list.filter_archived'), className: 'bg-border-primary text-text-secondary' };
   default:
     return { text: status, className: 'bg-bg-secondary text-text-secondary' };
   }
@@ -59,17 +52,27 @@ function matchesQuery(project: Project, query: string): boolean {
 
 const ProjectListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ProjectStatus | 'all'>('all');
-  const [refreshToken, setRefreshToken] = useState(0);
+  const [, setRefreshToken] = useState(0);
 
-  const projects = useMemo(() => {
-    const all = listProjects();
-    return all.filter((p) => (status === 'all' ? true : p.status === status)).filter((p) => matchesQuery(p, query));
-  }, [query, refreshToken, status]);
+  const STATUS_OPTIONS: readonly StatusOption[] = [
+    { value: 'all', label: t('project_list.filter_all_status') },
+    { value: 'draft', label: t('project_list.filter_draft') },
+    { value: 'generating', label: t('project_list.filter_generating') },
+    { value: 'in_progress', label: t('project_list.filter_in_progress') },
+    { value: 'completed', label: t('project_list.filter_completed') },
+    { value: 'archived', label: t('project_list.filter_archived') },
+  ];
+
+  const allProjects = listProjects();
+  const projects = allProjects
+    .filter((p) => (status === 'all' ? true : p.status === status))
+    .filter((p) => matchesQuery(p, query));
 
   const handleDelete = (projectId: string) => {
-    if (!confirm('确定要删除这个项目吗？此操作不可撤销。')) {
+    if (!confirm(t('project_list.confirm_delete'))) {
       return;
     }
     deleteProject(projectId);
@@ -77,7 +80,7 @@ const ProjectListPage: React.FC = () => {
   };
 
   return (
-    <AppShell pageTitle="项目管理" breadcrumb={['工作台', '项目管理']}>
+    <AppShell pageTitle={t('project_list.page_title')} breadcrumb={[t('project_list.breadcrumb_home'), t('project_list.breadcrumb_projects')]}>
       <div className="bg-white rounded-2xl shadow-card">
         <div className="p-6 border-b border-border-primary flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -85,22 +88,19 @@ const ProjectListPage: React.FC = () => {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索项目名称 / 描述 / 需求..."
+                placeholder={t('project_list.search_placeholder')}
                 className="w-full pl-10 pr-4 py-2 border border-border-primary rounded-lg bg-bg-secondary text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
               />
               <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
             </div>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as ProjectStatus | 'all')}
-              className="px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <div className="w-40">
+              <Select
+                value={status}
+                onChange={(value: string) => setStatus(value as ProjectStatus | 'all')}
+                options={STATUS_OPTIONS.map((opt) => ({ label: opt.label, value: opt.value }))}
+                placeholder={t('project_list.filter_all_status')}
+              />
+            </div>
           </div>
 
           <button
@@ -109,7 +109,7 @@ const ProjectListPage: React.FC = () => {
             className="bg-gradient-primary text-white px-6 py-3 rounded-lg font-medium hover:shadow-glow transition-all duration-300"
           >
             <i className="fas fa-plus mr-2"></i>
-            创建新项目
+            {t('project_list.btn_create')}
           </button>
         </div>
 
@@ -118,24 +118,24 @@ const ProjectListPage: React.FC = () => {
             <div className="text-4xl mb-3">
               <i className="fas fa-folder-open"></i>
             </div>
-            <div className="text-lg font-medium text-text-primary mb-1">暂无项目</div>
-            <div className="text-sm">先创建一个项目，或者从模块工作流拼一个系统。</div>
+            <div className="text-lg font-medium text-text-primary mb-1">{t('project_list.empty_title')}</div>
+            <div className="text-sm">{t('project_list.empty_desc')}</div>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-bg-secondary">
                 <tr>
-                  <th className="text-left py-3 px-6 text-text-secondary font-medium">项目</th>
-                  <th className="text-left py-3 px-6 text-text-secondary font-medium">工作流</th>
-                  <th className="text-left py-3 px-6 text-text-secondary font-medium">状态</th>
-                  <th className="text-left py-3 px-6 text-text-secondary font-medium">更新时间</th>
-                  <th className="text-right py-3 px-6 text-text-secondary font-medium">操作</th>
+                  <th className="text-left py-3 px-6 text-text-secondary font-medium">{t('project_list.table_project')}</th>
+                  <th className="text-left py-3 px-6 text-text-secondary font-medium">{t('project_list.table_workflow')}</th>
+                  <th className="text-left py-3 px-6 text-text-secondary font-medium">{t('project_list.table_status')}</th>
+                  <th className="text-left py-3 px-6 text-text-secondary font-medium">{t('project_list.table_updated')}</th>
+                  <th className="text-right py-3 px-6 text-text-secondary font-medium">{t('project_list.table_actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-primary">
                 {projects.map((p) => {
-                  const badge = getStatusBadge(p.status);
+                  const badge = getStatusBadge(p.status, t);
                   return (
                     <tr key={p.id} className="hover:bg-bg-secondary transition-colors">
                       <td className="py-4 px-6">
@@ -156,7 +156,7 @@ const ProjectListPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 px-6 text-sm text-text-secondary">
-                        {p.workflow.nodes.length} 模块 / {p.workflow.connections.length} 连接
+                        {t('project_list.workflow_info', { modules: p.workflow.nodes.length, connections: p.workflow.connections.length })}
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${badge.className}`}>
@@ -170,7 +170,7 @@ const ProjectListPage: React.FC = () => {
                             type="button"
                             onClick={() => navigate(`/project-detail?projectId=${p.id}`)}
                             className="text-primary hover:text-secondary transition-colors"
-                            aria-label="查看"
+                            aria-label={t('project_list.action_view')}
                           >
                             <i className="fas fa-eye"></i>
                           </button>
@@ -178,7 +178,7 @@ const ProjectListPage: React.FC = () => {
                             type="button"
                             onClick={() => navigate(`/project-create?projectId=${p.id}`)}
                             className="text-text-secondary hover:text-primary transition-colors"
-                            aria-label="编辑"
+                            aria-label={t('project_list.action_edit')}
                           >
                             <i className="fas fa-edit"></i>
                           </button>
@@ -186,7 +186,7 @@ const ProjectListPage: React.FC = () => {
                             type="button"
                             onClick={() => handleDelete(p.id)}
                             className="text-text-secondary hover:text-danger transition-colors"
-                            aria-label="删除"
+                            aria-label={t('project_list.action_delete')}
                           >
                             <i className="fas fa-trash"></i>
                           </button>

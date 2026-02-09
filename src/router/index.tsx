@@ -1,5 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { createBrowserRouter } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 import P_login from '../pages/p-login';
@@ -11,36 +10,25 @@ import P_knowledge_base from '../pages/p-knowledge_base';
 import P_component_db from '../pages/p-component_db';
 import P_circuit_cases from '../pages/p-circuit_cases';
 import P_user_profile from '../pages/p-user_profile';
+import LandingPage from '../pages/LandingPage';
 import NotFoundPage from './NotFoundPage';
 import ErrorPage from './ErrorPage';
-
-function Listener() {
-  const location = useLocation();
-  useEffect(() => {
-    const pageId = 'P-' + location.pathname.replace('/', '').toUpperCase();
-    console.log('当前pageId:', pageId, ', pathname:', location.pathname, ', search:', location.search);
-    if (typeof window === 'object' && window.parent && window.parent.postMessage) {
-      window.parent.postMessage({
-        type: 'chux-path-change',
-        pageId: pageId,
-        pathname: location.pathname,
-        search: location.search,
-      }, '*');
-    }
-  }, [location]);
-
-  return <Outlet />;
-}
+import RouteListener from './RouteListener';
 
 // 使用 createBrowserRouter 创建路由实例
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Listener />,
+    element: <RouteListener />,
     children: [
       {
         path: '/',
-        element: <Navigate to='/login' replace={true} />,
+        element: (
+          <ErrorBoundary>
+            <LandingPage />
+          </ErrorBoundary>
+        ),
+        errorElement: <ErrorPage />,
       },
       {
         path: '/login',
@@ -127,8 +115,8 @@ const router = createBrowserRouter([
         path: '*',
         element: <NotFoundPage />,
       },
-    ]
-  }
+    ],
+  },
 ]);
 
 export default router;

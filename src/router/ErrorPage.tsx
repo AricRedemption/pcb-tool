@@ -1,6 +1,6 @@
 // src/pages/ErrorPage.tsx
 import { useRouteError, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 
 type RouteErrorShape = {
@@ -11,8 +11,10 @@ type RouteErrorShape = {
 
 export default function ErrorPage() {
   const rawError = useRouteError();
-  const error: RouteErrorShape =
-    typeof rawError === 'object' && rawError ? (rawError as RouteErrorShape) : {};
+  const error = useMemo<RouteErrorShape>(
+    () => (typeof rawError === 'object' && rawError ? (rawError as RouteErrorShape) : {}),
+    [rawError],
+  );
   const navigate = useNavigate();
   console.error(error);
 

@@ -2,7 +2,10 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AppShell from '../../components/AppShell';
+import { Select } from '../../components/ui/select';
+import { AnimatedAlert } from '../../components/ui/animated-alert';
 import { MODULE_CATALOG } from '../../domain/moduleCatalog';
 import {
   Workflow,
@@ -24,6 +27,7 @@ interface ProjectFormData {
 }
 
 const ProjectCreatePage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectIdFromQuery = searchParams.get('projectId') ?? undefined;
@@ -45,6 +49,18 @@ const ProjectCreatePage: React.FC = () => {
     toNodeId: string;
     toPortId: string;
   }>({ fromNodeId: '', fromPortId: '', toNodeId: '', toPortId: '' });
+
+  const [, setAlertState] = useState<{ open: boolean; title: string; message: string; type: 'default' | 'destructive' | 'success' | 'warning' | 'info' }>({
+    open: false,
+    title: '',
+    message: '',
+    type: 'default'
+  });
+
+  const showAlert = (message: string, type: 'default' | 'destructive' | 'success' | 'warning' | 'info' = 'default', title: string = '') => {
+    setAlertState({ open: true, title, message, type });
+    setTimeout(() => setAlertState(prev => ({ ...prev, open: false })), 3000);
+  };
 
   // 校验当前正在选择的连接是否有效
   const pendingConnectionIssues = useMemo(() => {
@@ -70,9 +86,9 @@ const ProjectCreatePage: React.FC = () => {
   // 设置页面标题
   useEffect(() => {
     const originalTitle = document.title;
-    document.title = '创建新项目 - PCBTool.AI';
+    document.title = `${t(isEditMode ? 'project_create.title_edit' : 'project_create.title_create')} - PCBTool.AI`;
     return () => { document.title = originalTitle; };
-  }, []);
+  }, [t, isEditMode]);
 
   // 检查是否为编辑模式并加载数据
   useEffect(() => {
@@ -97,15 +113,15 @@ const ProjectCreatePage: React.FC = () => {
 
   const validateForm = (): boolean => {
     if (!formData.projectName.trim()) {
-      alert('请输入项目名称');
+      showAlert(t('project_create.error_name_required'), 'destructive');
       return false;
     }
-    
+
     if (!formData.textRequirements.trim()) {
-      alert('请输入电路设计需求');
+      showAlert(t('project_create.error_requirements_required'), 'destructive');
       return false;
     }
-    
+
     return true;
   };
 
@@ -118,14 +134,14 @@ const ProjectCreatePage: React.FC = () => {
 
   const handleFileUpload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
-      alert('文件大小不能超过5MB');
+      showAlert(t('project_create.error_file_size'), 'destructive');
       return;
     }
 
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(new Error('读取文件失败'));
+      reader.onerror = () => reject(new Error(t('project_create.error_file_read')));
       reader.readAsDataURL(file);
     });
     setCoverImageDataUrl(dataUrl);
@@ -172,7 +188,7 @@ const ProjectCreatePage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (confirm('确定要取消吗？未保存的内容将丢失。')) {
+    if (confirm(t('project_create.confirm_cancel'))) {
       navigate('/project-list');
     }
   };
@@ -196,7 +212,7 @@ const ProjectCreatePage: React.FC = () => {
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     setIsSavingDraft(false);
-    alert('草稿保存成功！');
+    showAlert(t('project_create.success_draft'), 'success');
   };
 
   const handleStartGenerate = () => {
@@ -213,6 +229,9 @@ const ProjectCreatePage: React.FC = () => {
       projectIdFromQuery,
     );
     setProjectStatus(project.id, 'generating');
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(`pcbtool.auto-generate.${project.id}`);
+    }
     navigate(`/project-detail?projectId=${project.id}&action=generate`);
   };
 
@@ -221,114 +240,108 @@ const ProjectCreatePage: React.FC = () => {
 
   return (
     <AppShell
-      pageTitle={isEditMode ? '编辑项目' : '创建新项目'}
-      breadcrumb={['工作台', '项目管理', isEditMode ? '编辑项目' : '创建新项目']}
+      pageTitle={t(isEditMode ? 'project_create.title_edit' : 'project_create.title_create')}
+      breadcrumb={[t('profile.breadcrumb_home'), t('project_create.breadcrumb_projects'), t(isEditMode ? 'project_create.title_edit' : 'project_create.title_create')]}
     >
       <div className="bg-white rounded-2xl shadow-card">
         <form className="p-8 space-y-8">
           {/* 项目基本信息 */}
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">项目基本信息</h3>
-              
+            <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">{t('project_create.section_basic')}</h3>
+
             {/* 项目名称 */}
             <div className="space-y-2">
               <label htmlFor="project-name" className="block text-sm font-medium text-text-primary">
-                  项目名称 <span className="text-danger">*</span>
+                  {t('project_create.project_name')} <span className="text-danger">{t('project_create.required')}</span>
               </label>
-              <input 
-                type="text" 
-                id="project-name" 
-                name="project-name" 
+              <input
+                type="text"
+                id="project-name"
+                name="project-name"
                 className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} bg-white text-text-primary placeholder-text-secondary`}
-                placeholder="请输入项目名称，如：智能家居控制板"
+                placeholder={t('project_create.project_name_placeholder')}
                 value={formData.projectName}
                 onChange={(e) => handleInputChange('projectName', e.target.value)}
                 required
               />
-              <p className="text-xs text-text-secondary">建议包含项目的主要功能或应用场景</p>
+              <p className="text-xs text-text-secondary">{t('project_create.project_name_hint')}</p>
             </div>
-              
+
             {/* 项目描述 */}
             <div className="space-y-2">
               <label htmlFor="project-description" className="block text-sm font-medium text-text-primary">
-                  项目描述
+                  {t('project_create.project_description')}
               </label>
-              <textarea 
-                id="project-description" 
-                name="project-description" 
+              <textarea
+                id="project-description"
+                name="project-description"
                 rows={4}
                 className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} bg-white text-text-primary placeholder-text-secondary resize-none`}
-                placeholder="简要描述项目的背景、目标和应用场景..."
+                placeholder={t('project_create.project_description_placeholder')}
                 value={formData.projectDescription}
                 onChange={(e) => handleInputChange('projectDescription', e.target.value)}
               />
-              <p className="text-xs text-text-secondary">帮助AI更好地理解您的项目需求</p>
+              <p className="text-xs text-text-secondary">{t('project_create.project_description_hint')}</p>
             </div>
           </div>
 
           {/* 需求输入区 */}
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">电路设计需求</h3>
-              
+            <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">{t('project_create.section_requirements')}</h3>
+
             {/* 文本需求输入 */}
             <div className="space-y-2">
               <label htmlFor="text-requirements" className="block text-sm font-medium text-text-primary">
-                  详细需求描述 <span className="text-danger">*</span>
+                  {t('project_create.requirements_label')} <span className="text-danger">{t('project_create.required')}</span>
               </label>
-              <textarea 
-                id="text-requirements" 
-                name="text-requirements" 
+              <textarea
+                id="text-requirements"
+                name="text-requirements"
                 rows={6}
                 className={`w-full px-4 py-3 border border-border-primary rounded-lg ${styles.formInputFocus} bg-white text-text-primary placeholder-text-secondary resize-none`}
-                placeholder={`请详细描述您的电路设计需求，包括：
-• 主要功能和性能要求
-• 使用的主控芯片类型（如Arduino、ESP32、STM32等）
-• 需要的传感器和执行器
-• 电源要求和功耗限制
-• 尺寸和封装要求
-• 其他特殊要求...`}
+                placeholder={t('project_create.requirements_placeholder')}
                 value={formData.textRequirements}
                 onChange={(e) => handleInputChange('textRequirements', e.target.value)}
                 required
               />
-              <p className="text-xs text-text-secondary">描述越详细，AI生成的方案越精准</p>
+              <p className="text-xs text-text-secondary">{t('project_create.requirements_hint')}</p>
             </div>
-              
+
             {/* 图像上传 */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-text-primary">
-                  上传参考图像 <span className="text-text-secondary">(可选)</span>
+                  {t('project_create.upload_label')} <span className="text-text-secondary">{t('project_create.upload_optional')}</span>
               </label>
-              <div 
+              <div
                 className={`${styles.uploadArea} ${isDragOver ? styles.uploadAreaDragover : ''} rounded-lg p-8 text-center cursor-pointer`}
                 onClick={handleUploadAreaClick}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   ref={fileInputRef}
-                  accept="image/*" 
+                  accept="image/*"
                   className="hidden"
                   onChange={handleFileInputChange}
                 />
                 {!coverImageDataUrl ? (
                   <div>
                     <i className="fas fa-cloud-upload-alt text-4xl text-text-secondary mb-4"></i>
-                    <p className="text-text-primary font-medium mb-2">点击上传或拖拽图像到此处</p>
-                    <p className="text-text-secondary text-sm">支持JPG、PNG格式，最大5MB</p>
-                    <p className="text-text-secondary text-xs mt-2">可上传电路草图、参考设计图等</p>
+                    <p className="text-text-primary font-medium mb-2">{t('project_create.upload_click')}</p>
+                    <p className="text-text-secondary text-sm">{t('project_create.upload_format')}</p>
+                    <p className="text-text-secondary text-xs mt-2">{t('project_create.upload_hint')}</p>
                   </div>
                 ) : (
                   <div>
-                    <img src={coverImageDataUrl} alt="预览图" className="max-w-full max-h-48 mx-auto rounded-lg" />
-                    <button 
-                      type="button" 
+                    <img src={coverImageDataUrl} alt={t('project_create.preview_alt')} className="max-w-full max-h-48 mx-auto rounded-lg" />
+                    <button
+                      type="button"
                       onClick={handleRemoveImage}
                       className="text-danger hover:text-danger-dark mt-2 text-sm"
                     >
-                      <i className="fas fa-trash mr-1"></i>移除图像
+                      <i className="fas fa-trash mr-1"></i>{t('project_create.remove_image')}
                     </button>
                   </div>
                 )}
@@ -338,7 +351,7 @@ const ProjectCreatePage: React.FC = () => {
 
           <div className="space-y-6">
             <h3 className="text-xl font-semibold text-text-primary border-b border-border-primary pb-3">
-              模块拼接工作流 <span className="text-text-secondary text-sm font-normal">(可选)</span>
+              {t('project_create.section_workflow')} <span className="text-text-secondary text-sm font-normal">{t('project_create.workflow_optional')}</span>
             </h3>
 
             {/* 可视化预览图 */}
@@ -348,7 +361,7 @@ const ProjectCreatePage: React.FC = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-text-secondary">
                   <i className="fas fa-project-diagram text-4xl mb-4 opacity-30"></i>
-                  <p>添加模块后此处将显示连接图</p>
+                  <p>{t('project_create.workflow_empty')}</p>
                 </div>
               )}
             </div>
@@ -356,19 +369,16 @@ const ProjectCreatePage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1 space-y-4">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-text-primary">添加模块</label>
+                  <label className="block text-sm font-medium text-text-primary">{t('project_create.add_module')}</label>
                   <div className="flex space-x-2">
-                    <select
-                      value={moduleToAdd}
-                      onChange={(e) => setModuleToAdd(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-                    >
-                      {MODULE_CATALOG.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex-1">
+                      <Select
+                        value={moduleToAdd}
+                        onChange={setModuleToAdd}
+                        options={MODULE_CATALOG.map((m) => ({ label: m.name, value: m.id }))}
+                        placeholder={t('project_create.select_module')}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -389,19 +399,19 @@ const ProjectCreatePage: React.FC = () => {
                       }}
                       className="px-4 py-2 bg-gradient-primary text-white rounded-lg font-medium hover:shadow-glow transition-all duration-300"
                     >
-                      <i className="fas fa-plus mr-2"></i>添加
+                      <i className="fas fa-plus mr-2"></i>{t('project_create.btn_add')}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-text-primary">已添加模块</span>
-                    <span className="text-xs text-text-secondary">{workflow.nodes.length} 个</span>
+                    <span className="text-sm font-medium text-text-primary">{t('project_create.added_modules')}</span>
+                    <span className="text-xs text-text-secondary">{workflow.nodes.length} {t('project_create.modules_count')}</span>
                   </div>
                   <div className="border border-border-primary rounded-lg overflow-hidden">
                     {workflow.nodes.length === 0 ? (
-                      <div className="p-4 text-sm text-text-secondary">还没有模块，先从上方添加。</div>
+                      <div className="p-4 text-sm text-text-secondary">{t('project_create.no_modules')}</div>
                     ) : (
                       <ul className="divide-y divide-border-primary">
                         {workflow.nodes.map((node) => {
@@ -424,7 +434,7 @@ const ProjectCreatePage: React.FC = () => {
                                   setPendingConnection({ fromNodeId: '', fromPortId: '', toNodeId: '', toPortId: '' });
                                 }}
                                 className="p-2 text-text-secondary hover:text-danger transition-colors"
-                                aria-label="移除模块"
+                                aria-label={t('project_create.remove_module')}
                               >
                                 <i className="fas fa-trash"></i>
                               </button>
@@ -439,84 +449,60 @@ const ProjectCreatePage: React.FC = () => {
 
               <div className="lg:col-span-2 space-y-4">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-text-primary">添加连接</label>
+                  <label className="block text-sm font-medium text-text-primary">{t('project_create.add_connection')}</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <div className="text-xs text-text-secondary">来源</div>
-                      <select
+                      <div className="text-xs text-text-secondary">{t('project_create.source')}</div>
+                      <Select
                         value={pendingConnection.fromNodeId}
-                        onChange={(e) =>
+                        onChange={(value) =>
                           setPendingConnection((prev) => ({
                             ...prev,
-                            fromNodeId: e.target.value,
+                            fromNodeId: value,
                             fromPortId: '',
                           }))
                         }
-                        className="w-full px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-                      >
-                        <option value="">选择模块</option>
-                        {workflow.nodes.map((n) => (
-                          <option key={n.id} value={n.id}>
-                            {n.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
+                        options={workflow.nodes.map((n) => ({ label: n.label, value: n.id }))}
+                        placeholder={t('project_create.select_module')}
+                      />
+                      <Select
                         value={pendingConnection.fromPortId}
-                        onChange={(e) => setPendingConnection((prev) => ({ ...prev, fromPortId: e.target.value }))}
-                        className="w-full px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-                        disabled={!pendingConnection.fromNodeId}
-                      >
-                        <option value="">选择端口</option>
-                        {(() => {
+                        onChange={(value) => setPendingConnection((prev) => ({ ...prev, fromPortId: value }))}
+                        options={(() => {
                           const node = workflow.nodes.find((n) => n.id === pendingConnection.fromNodeId);
                           const moduleDefinition = node ? getModuleById(MODULE_CATALOG, node.moduleId) : undefined;
-                          return (moduleDefinition?.ports ?? []).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ));
+                          return (moduleDefinition?.ports ?? []).map((p) => ({ label: p.name, value: p.id }));
                         })()}
-                      </select>
+                        placeholder={t('project_create.select_port')}
+                        disabled={!pendingConnection.fromNodeId}
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <div className="text-xs text-text-secondary">目标</div>
-                      <select
+                      <div className="text-xs text-text-secondary">{t('project_create.target')}</div>
+                      <Select
                         value={pendingConnection.toNodeId}
-                        onChange={(e) =>
+                        onChange={(value) =>
                           setPendingConnection((prev) => ({
                             ...prev,
-                            toNodeId: e.target.value,
+                            toNodeId: value,
                             toPortId: '',
                           }))
                         }
-                        className="w-full px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-                      >
-                        <option value="">选择模块</option>
-                        {workflow.nodes.map((n) => (
-                          <option key={n.id} value={n.id}>
-                            {n.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
+                        options={workflow.nodes.map((n) => ({ label: n.label, value: n.id }))}
+                        placeholder={t('project_create.select_module')}
+                      />
+                      <Select
                         value={pendingConnection.toPortId}
-                        onChange={(e) => setPendingConnection((prev) => ({ ...prev, toPortId: e.target.value }))}
-                        className="w-full px-3 py-2 border border-border-primary rounded-lg bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
-                        disabled={!pendingConnection.toNodeId}
-                      >
-                        <option value="">选择端口</option>
-                        {(() => {
+                        onChange={(value) => setPendingConnection((prev) => ({ ...prev, toPortId: value }))}
+                        options={(() => {
                           const node = workflow.nodes.find((n) => n.id === pendingConnection.toNodeId);
                           const moduleDefinition = node ? getModuleById(MODULE_CATALOG, node.moduleId) : undefined;
-                          return (moduleDefinition?.ports ?? []).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ));
+                          return (moduleDefinition?.ports ?? []).map((p) => ({ label: p.name, value: p.id }));
                         })()}
-                      </select>
+                        placeholder={t('project_create.select_port')}
+                        disabled={!pendingConnection.toNodeId}
+                      />
                     </div>
                   </div>
                   <div className="flex flex-col space-y-2">
@@ -528,7 +514,7 @@ const ProjectCreatePage: React.FC = () => {
                             {pendingConnectionIssues[0].message}
                           </span>
                         ) : (
-                          <span>支持电源/总线类型匹配与基础风险提示。</span>
+                          <span>{t('project_create.connection_hint')}</span>
                         )}
                       </div>
                       <button
@@ -547,8 +533,8 @@ const ProjectCreatePage: React.FC = () => {
                           setPendingConnection({ fromNodeId: '', fromPortId: '', toNodeId: '', toPortId: '' });
                         }}
                         className={`px-4 py-2 border border-border-primary rounded-lg font-medium transition-colors ${
-                          pendingConnectionIssues.some(i => i.severity === 'error') 
-                            ? 'bg-bg-secondary text-text-secondary cursor-not-allowed opacity-50' 
+                          pendingConnectionIssues.some(i => i.severity === 'error')
+                            ? 'bg-bg-secondary text-text-secondary cursor-not-allowed opacity-50'
                             : 'bg-white text-text-primary hover:bg-bg-secondary'
                         }`}
                         disabled={
@@ -559,7 +545,7 @@ const ProjectCreatePage: React.FC = () => {
                             pendingConnectionIssues.some(i => i.severity === 'error')
                         }
                       >
-                        <i className="fas fa-link mr-2"></i>添加连接
+                        <i className="fas fa-link mr-2"></i>{t('project_create.btn_add_connection')}
                       </button>
                     </div>
                   </div>
@@ -567,12 +553,12 @@ const ProjectCreatePage: React.FC = () => {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-text-primary">连接列表</span>
-                    <span className="text-xs text-text-secondary">{workflow.connections.length} 条</span>
+                    <span className="text-sm font-medium text-text-primary">{t('project_create.connection_list')}</span>
+                    <span className="text-xs text-text-secondary">{workflow.connections.length} {t('project_create.connections_count')}</span>
                   </div>
                   <div className="border border-border-primary rounded-lg overflow-hidden">
                     {workflow.connections.length === 0 ? (
-                      <div className="p-4 text-sm text-text-secondary">还没有连接，先从上方添加。</div>
+                      <div className="p-4 text-sm text-text-secondary">{t('project_create.no_connections')}</div>
                     ) : (
                       <ul className="divide-y divide-border-primary">
                         {workflow.connections.map((c) => (
@@ -584,7 +570,7 @@ const ProjectCreatePage: React.FC = () => {
                               type="button"
                               onClick={() => setWorkflow((prev) => ({ ...prev, connections: prev.connections.filter((x) => x.id !== c.id) }))}
                               className="p-2 text-text-secondary hover:text-danger transition-colors"
-                              aria-label="移除连接"
+                              aria-label={t('project_create.remove_connection')}
                             >
                               <i className="fas fa-trash"></i>
                             </button>
@@ -597,12 +583,12 @@ const ProjectCreatePage: React.FC = () => {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-text-primary">校验结果</span>
-                    <span className="text-xs text-text-secondary">{workflowIssues.length} 条</span>
+                    <span className="text-sm font-medium text-text-primary">{t('project_create.validation_results')}</span>
+                    <span className="text-xs text-text-secondary">{workflowIssues.length} {t('project_create.issues_count')}</span>
                   </div>
                   <div className="border border-border-primary rounded-lg overflow-hidden">
                     {workflowIssues.length === 0 ? (
-                      <div className="p-4 text-sm text-success">暂无问题</div>
+                      <div className="p-4 text-sm text-success">{t('project_create.no_issues')}</div>
                     ) : (
                       <ul className="divide-y divide-border-primary">
                         {workflowIssues.map((issue) => (
@@ -637,7 +623,7 @@ const ProjectCreatePage: React.FC = () => {
                                 }}
                                 className="ml-auto px-3 py-1 bg-bg-secondary text-text-primary border border-border-primary rounded-lg text-xs hover:bg-white transition-colors"
                               >
-                                  一键添加
+                                  {t('project_create.quick_add')}
                               </button>
                             )}
                           </li>
@@ -652,31 +638,31 @@ const ProjectCreatePage: React.FC = () => {
 
           {/* 操作按钮区 */}
           <div className="flex items-center justify-end space-x-4 pt-6 border-t border-border-primary">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleCancel}
               className={`px-6 py-3 ${styles.btnSecondary} rounded-lg font-medium`}
             >
               <i className="fas fa-times mr-2"></i>
-                取消
+                {t('project_create.btn_cancel')}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleSaveDraft}
               disabled={isSavingDraft}
               className="px-6 py-3 bg-warning text-white rounded-lg font-medium hover:bg-warning-dark transition-all duration-300 disabled:opacity-50"
             >
               <i className={`fas ${isSavingDraft ? 'fa-check' : 'fa-save'} mr-2`}></i>
-              {isSavingDraft ? '已保存' : '保存草稿'}
+              {isSavingDraft ? t('project_create.btn_saved') : t('project_create.btn_save_draft')}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleStartGenerate}
               className={`px-8 py-3 ${styles.btnPrimary} text-white rounded-lg font-medium ${hasWorkflowErrors ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={hasWorkflowErrors}
             >
               <i className="fas fa-magic mr-2"></i>
-                开始生成方案
+                {t('project_create.btn_generate')}
             </button>
           </div>
         </form>
@@ -689,13 +675,13 @@ const ProjectCreatePage: React.FC = () => {
             <i className="fas fa-lightbulb text-white"></i>
           </div>
           <div className="space-y-2">
-            <h4 className="font-semibold text-text-primary">温馨提示</h4>
+            <h4 className="font-semibold text-text-primary">{t('project_create.tips_title')}</h4>
             <ul className="text-sm text-text-secondary space-y-1">
-              <li>• 需求描述越详细，AI生成的电路方案质量越高</li>
-              <li>• 建议明确主控芯片类型、电源要求等关键参数</li>
-              <li>• 上传清晰的参考图像可以显著提升方案准确性</li>
-              <li>• 系统将生成3-5个备选方案供您选择和优化</li>
-              <li>• 生成过程通常需要30秒到2分钟，请耐心等待</li>
+              <li>• {t('project_create.tip_1')}</li>
+              <li>• {t('project_create.tip_2')}</li>
+              <li>• {t('project_create.tip_3')}</li>
+              <li>• {t('project_create.tip_4')}</li>
+              <li>• {t('project_create.tip_5')}</li>
             </ul>
           </div>
         </div>

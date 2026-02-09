@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   ReactFlow,
   useNodesState,
@@ -24,63 +24,58 @@ interface L1GraphProps {
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
 }
 
-// Group节点 - 模块容器
 const GroupNode: React.FC<{ data: { label: string; summary?: string; nodeType: string } }> = ({ data }) => {
   return (
-    <div className="px-4 py-3 rounded-xl border-2 border-dashed border-purple-400 bg-purple-50 bg-opacity-50 min-w-[280px] min-h-[200px]">
-      <div className="font-bold text-base text-purple-700 mb-1">
+    <div className='px-4 py-3 rounded-xl border-2 border-dashed border-purple-400 bg-purple-50 bg-opacity-50 min-w-[280px] min-h-[200px]'>
+      <div className='font-bold text-base text-purple-700 mb-1'>
         📦 {data.label}
       </div>
       {data.summary && (
-        <div className="text-xs text-purple-600 mb-2">{data.summary}</div>
+        <div className='text-xs text-purple-600 mb-2'>{data.summary}</div>
       )}
-      <div className="text-xs text-purple-500 italic">功能模块</div>
+      <div className='text-xs text-purple-500 italic'>功能模块</div>
     </div>
   );
 };
 
-// 端口级详细节点 - 具体器件
 const DetailNode: React.FC<{ data: { label: string; ports: GraphPort[]; nodeType: string } }> = ({ data }) => {
   const inputPorts = data.ports?.filter(p => p.direction === 'in') || [];
   const outputPorts = data.ports?.filter(p => p.direction === 'out') || [];
   const biPorts = data.ports?.filter(p => p.direction === 'bidirectional') || [];
 
   return (
-    <div className="px-3 py-2 rounded-lg border-2 border-indigo-500 bg-white shadow-md min-w-[200px]">
-      {/* 头部 */}
-      <div className="font-semibold text-sm text-gray-900 mb-2 border-b pb-1">
+    <div className='px-3 py-2 rounded-lg border-2 border-indigo-500 bg-white shadow-md min-w-[200px]'>
+      <div className='font-semibold text-sm text-gray-900 mb-2 border-b pb-1'>
         {data.label}
       </div>
 
-      {/* 输入端口 */}
       {inputPorts.length > 0 && (
-        <div className="space-y-1 mb-2">
+        <div className='space-y-1 mb-2'>
           {inputPorts.map((port, idx) => (
-            <div key={port.id} className="flex items-center gap-2 text-xs">
+            <div key={port.id} className='flex items-center gap-2 text-xs'>
               <Handle
-                type="target"
+                type='target'
                 position={Position.Left}
                 id={port.id}
                 style={{ top: 60 + idx * 20, left: -8, width: 8, height: 8 }}
               />
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-gray-700">{port.name}</span>
-              {port.voltage && <span className="text-gray-500">({port.voltage})</span>}
+              <div className='w-2 h-2 rounded-full bg-green-500'></div>
+              <span className='text-gray-700'>{port.name}</span>
+              {port.voltage && <span className='text-gray-500'>({port.voltage})</span>}
             </div>
           ))}
         </div>
       )}
 
-      {/* 输出端口 */}
       {outputPorts.length > 0 && (
-        <div className="space-y-1 mb-2">
+        <div className='space-y-1 mb-2'>
           {outputPorts.map((port, idx) => (
-            <div key={port.id} className="flex items-center justify-end gap-2 text-xs">
-              {port.voltage && <span className="text-gray-500">({port.voltage})</span>}
-              <span className="text-gray-700">{port.name}</span>
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <div key={port.id} className='flex items-center justify-end gap-2 text-xs'>
+              {port.voltage && <span className='text-gray-500'>({port.voltage})</span>}
+              <span className='text-gray-700'>{port.name}</span>
+              <div className='w-2 h-2 rounded-full bg-blue-500'></div>
               <Handle
-                type="source"
+                type='source'
                 position={Position.Right}
                 id={port.id}
                 style={{ top: 60 + (inputPorts.length * 20) + idx * 20, right: -8, width: 8, height: 8 }}
@@ -90,26 +85,25 @@ const DetailNode: React.FC<{ data: { label: string; ports: GraphPort[]; nodeType
         </div>
       )}
 
-      {/* 双向端口 */}
       {biPorts.length > 0 && (
-        <div className="space-y-1">
+        <div className='space-y-1'>
           {biPorts.map((port, idx) => (
-            <div key={port.id} className="flex items-center gap-2 text-xs">
+            <div key={port.id} className='flex items-center gap-2 text-xs'>
               <Handle
-                type="target"
+                type='target'
                 position={Position.Left}
                 id={`${port.id}-in`}
                 style={{ top: 60 + (inputPorts.length + outputPorts.length) * 20 + idx * 20, left: -8 }}
               />
               <Handle
-                type="source"
+                type='source'
                 position={Position.Right}
                 id={`${port.id}-out`}
                 style={{ top: 60 + (inputPorts.length + outputPorts.length) * 20 + idx * 20, right: -8 }}
               />
-              <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-              <span className="text-gray-700">{port.name}</span>
-              {port.busType && <span className="text-gray-500">({port.busType})</span>}
+              <div className='w-2 h-2 rounded-full bg-purple-500'></div>
+              <span className='text-gray-700'>{port.name}</span>
+              {port.busType && <span className='text-gray-500'>({port.busType})</span>}
             </div>
           ))}
         </div>
@@ -128,7 +122,6 @@ const L1Graph: React.FC<L1GraphProps> = ({ data, className, onNodeClick, onEdgeC
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
-    // 转换节点
     const initialNodes: Node[] = data.nodes.map((node) => ({
       id: node.id,
       type: node.nodeType === 'group' ? 'group' : 'detail',
@@ -142,43 +135,47 @@ const L1Graph: React.FC<L1GraphProps> = ({ data, className, onNodeClick, onEdgeC
       extent: node.parentId ? 'parent' : undefined,
     }));
 
-    // 转换边
     const initialEdges: Edge[] = data.edges.map((edge) => {
-      let style: any = { strokeWidth: 2 };
+      const style: React.CSSProperties = { strokeWidth: 2 };
       let animated = false;
       let markerColor = '#64748b';
 
       switch (edge.type) {
-        case 'power':
-          style = { stroke: '#ef4444', strokeWidth: 3 };
-          markerColor = '#ef4444';
-          break;
-        case 'bus':
-          style = { stroke: '#3b82f6', strokeDasharray: '5,5' };
-          animated = true;
-          markerColor = '#3b82f6';
-          break;
-        case 'io':
-          style = { stroke: '#10b981' };
-          markerColor = '#10b981';
-          break;
-        case 'rf':
-          style = { stroke: '#8b5cf6', strokeDasharray: '3,3' };
-          animated = true;
-          markerColor = '#8b5cf6';
-          break;
-        case 'net':
-          style = { stroke: '#06b6d4', strokeDasharray: '5,5' };
-          animated = true;
-          markerColor = '#06b6d4';
-          break;
-        case 'debug':
-          style = { stroke: '#f59e0b' };
-          markerColor = '#f59e0b';
-          break;
-        default:
-          style = { stroke: '#64748b', strokeDasharray: '2,2' };
-          markerColor = '#64748b';
+      case 'power':
+        style.stroke = '#ef4444';
+        style.strokeWidth = 3;
+        markerColor = '#ef4444';
+        break;
+      case 'bus':
+        style.stroke = '#3b82f6';
+        style.strokeDasharray = '5,5';
+        animated = true;
+        markerColor = '#3b82f6';
+        break;
+      case 'io':
+        style.stroke = '#10b981';
+        markerColor = '#10b981';
+        break;
+      case 'rf':
+        style.stroke = '#8b5cf6';
+        style.strokeDasharray = '3,3';
+        animated = true;
+        markerColor = '#8b5cf6';
+        break;
+      case 'net':
+        style.stroke = '#06b6d4';
+        style.strokeDasharray = '5,5';
+        animated = true;
+        markerColor = '#06b6d4';
+        break;
+      case 'debug':
+        style.stroke = '#f59e0b';
+        markerColor = '#f59e0b';
+        break;
+      default:
+        style.stroke = '#64748b';
+        style.strokeDasharray = '2,2';
+        markerColor = '#64748b';
       }
 
       if (edge.criticality === 'high') {
@@ -205,24 +202,19 @@ const L1Graph: React.FC<L1GraphProps> = ({ data, className, onNodeClick, onEdgeC
       };
     });
 
-    // 使用 dagre 自动布局（支持复合图/分组）
     const g = new dagre.graphlib.Graph({ compound: true });
     g.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 180, edgesep: 50 });
     g.setDefaultEdgeLabel(() => ({}));
 
-    // 估算节点尺寸
     initialNodes.forEach((node) => {
       if (node.type === 'group') {
-        // Group节点 - 模块容器
         g.setNode(node.id, { width: 300, height: 250 });
       } else {
-        // Detail节点 - 具体器件（基于端口数量）
-        const portCount = node.data.ports?.length || 0;
+        const portCount = (node.data as { ports: unknown[] }).ports?.length || 0;
         const height = 60 + portCount * 24 + 20;
         g.setNode(node.id, { width: 220, height });
       }
 
-      // 设置父子关系
       if (node.parentId) {
         g.setParent(node.id, node.parentId);
       }
@@ -234,17 +226,14 @@ const L1Graph: React.FC<L1GraphProps> = ({ data, className, onNodeClick, onEdgeC
 
     dagre.layout(g);
 
-    // 应用布局位置
     const layoutedNodes = initialNodes.map((node) => {
       const nodeWithPosition = g.node(node.id);
       const width = nodeWithPosition.width;
       const height = nodeWithPosition.height;
 
-      // 计算绝对位置
       let x = nodeWithPosition.x - width / 2;
       let y = nodeWithPosition.y - height / 2;
 
-      // 如果有父节点，转换为相对位置
       if (node.parentId) {
         const parentNodePosition = g.node(node.parentId);
         const parentX = parentNodePosition.x - parentNodePosition.width / 2;
@@ -282,39 +271,38 @@ const L1Graph: React.FC<L1GraphProps> = ({ data, className, onNodeClick, onEdgeC
         minZoom={0.2}
         maxZoom={2}
       >
-        <Background color="#ccc" gap={20} />
+        <Background color='#ccc' gap={20} />
         <Controls />
       </ReactFlow>
 
-      {/* 图例 */}
-      <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-3 text-xs space-y-3">
+      <div className='absolute top-4 right-4 bg-white rounded-lg shadow-lg p-3 text-xs space-y-3'>
         <div>
-          <div className="font-semibold mb-2">层次结构</div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-dashed border-purple-400 bg-purple-50"></div>
+          <div className='font-semibold mb-2'>层次结构</div>
+          <div className='space-y-1'>
+            <div className='flex items-center gap-2'>
+              <div className='w-4 h-4 border-2 border-dashed border-purple-400 bg-purple-50'></div>
               <span>功能模块（容器）</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-indigo-500 bg-white"></div>
+            <div className='flex items-center gap-2'>
+              <div className='w-4 h-4 border-2 border-indigo-500 bg-white'></div>
               <span>具体器件（端口）</span>
             </div>
           </div>
         </div>
 
-        <div className="border-t pt-2">
-          <div className="font-semibold mb-2">端口类型</div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+        <div className='border-t pt-2'>
+          <div className='font-semibold mb-2'>端口类型</div>
+          <div className='space-y-1'>
+            <div className='flex items-center gap-2'>
+              <div className='w-2 h-2 rounded-full bg-green-500'></div>
               <span>输入</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <div className='flex items-center gap-2'>
+              <div className='w-2 h-2 rounded-full bg-blue-500'></div>
               <span>输出</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+            <div className='flex items-center gap-2'>
+              <div className='w-2 h-2 rounded-full bg-purple-500'></div>
               <span>双向</span>
             </div>
           </div>

@@ -1,20 +1,61 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AiConfig, loadAiConfig } from '../lib/storage';
+import { cn } from '../lib/utils';
+import {
+  LayoutDashboard,
+  FolderOpen,
+  BookOpen,
+  Search,
+  Layers,
+  Settings,
+  Menu,
+  Bell,
+  ChevronDown,
+  CircuitBoard,
+  Cpu,
+} from 'lucide-react';
+import { Button } from './ui/button';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from './ui/breadcrumb';
 
 type NavItem = {
   to: string;
-  label: string;
-  iconClass: string;
+  labelKey: string;
+  icon: React.ElementType;
+};
+
+const LEGACY_LABEL_TO_I18N_KEY: Record<string, string> = {
+  工作台: 'app.dashboard',
+  项目管理: 'app.projects',
+  资源中心: 'app.resources',
+  知识库: 'app.resources',
+  元器件库: 'app.component_db',
+  元器件数据库: 'app.component_db',
+  电路案例: 'app.cases',
+  电路案例库: 'app.cases',
+  用户设置: 'app.profile',
+  个人中心: 'app.profile',
+  项目详情: 'app.project_detail',
+  创建新项目: 'app.create_project',
+  编辑项目: 'app.edit_project',
 };
 
 const NAV_ITEMS: readonly NavItem[] = [
-  { to: '/dashboard', label: '工作台', iconClass: 'fas fa-tachometer-alt' },
-  { to: '/project-list', label: '项目管理', iconClass: 'fas fa-folder-open' },
-  { to: '/knowledge-base', label: '知识库', iconClass: 'fas fa-book' },
-  { to: '/component-db', label: '元器件库', iconClass: 'fas fa-search' },
-  { to: '/circuit-cases', label: '电路案例', iconClass: 'fas fa-layer-group' },
-  { to: '/user-profile', label: '用户设置', iconClass: 'fas fa-cog' },
+  { to: '/dashboard', labelKey: 'app.dashboard', icon: LayoutDashboard },
+  { to: '/project-list', labelKey: 'app.projects', icon: FolderOpen },
+  { to: '/knowledge-base', labelKey: 'app.resources', icon: BookOpen },
+  { to: '/component-db', labelKey: 'app.component_db', icon: Cpu },
+  { to: '/circuit-cases', labelKey: 'app.cases', icon: Layers },
+  { to: '/user-profile', labelKey: 'app.profile', icon: Settings },
 ];
 
 export type AppShellProps = {
@@ -30,14 +71,39 @@ function isActivePath(currentPathname: string, itemTo: string): boolean {
   return currentPathname.startsWith(itemTo);
 }
 
-export default function AppShell({ pageTitle, breadcrumb, children }: AppShellProps) {
+export default function AppShell({
+  pageTitle,
+  breadcrumb,
+  children,
+}: AppShellProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpenOnMobile, setIsSidebarOpenOnMobile] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
-  const [aiConfig, setAiConfig] = useState<AiConfig | undefined>(() => loadAiConfig());
+  const [aiConfig, setAiConfig] = useState<AiConfig | undefined>(() =>
+    loadAiConfig(),
+  );
 
-  const breadcrumbItems = useMemo(() => breadcrumb ?? ['工作台', pageTitle], [breadcrumb, pageTitle]);
+  const normalizeLabel = useCallback(
+    (label: string) => {
+      if (label.startsWith('app.')) {
+        return t(label);
+      }
+      const mappedKey = LEGACY_LABEL_TO_I18N_KEY[label];
+      return mappedKey ? t(mappedKey) : label;
+    },
+    [t],
+  );
+
+  const displayPageTitle = normalizeLabel(pageTitle);
+  const breadcrumbItems = useMemo(
+    () =>
+      (breadcrumb ?? ['工作台', pageTitle]).map((item) =>
+        normalizeLabel(item),
+      ),
+    [breadcrumb, pageTitle, normalizeLabel],
+  );
 
   useEffect(() => {
     setAiConfig(loadAiConfig());
@@ -60,147 +126,231 @@ export default function AppShell({ pageTitle, breadcrumb, children }: AppShellPr
     };
   }, []);
 
-  const handleGlobalSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') {
-      return;
-    }
+  const handleGlobalSearchKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key !== 'Enter') return;
     const query = globalSearch.trim();
-    if (!query) {
-      return;
-    }
-    console.log('搜索:', query);
+    if (!query) return;
+    console.log('Search:', query);
   };
 
-  const handleAvatarClick = () => {
-    navigate('/user-profile');
-  };
-
-  const isAiConfigured = Boolean(aiConfig?.baseUrl && aiConfig?.apiKey && aiConfig?.model);
+  const isAiConfigured = Boolean(
+    aiConfig?.baseUrl && aiConfig?.apiKey && aiConfig?.model,
+  );
   const isAiConnected = Boolean(isAiConfigured && aiConfig?.lastTestOk);
   const aiStatusText = !isAiConfigured
-    ? 'AI 未配置'
+    ? t('app.ai_not_configured')
     : isAiConnected
-      ? 'AI 连接正常'
-      : 'AI 未连接';
-  const aiDotClass = isAiConnected ? 'bg-success' : 'bg-danger';
+      ? t('app.ai_connected')
+      : t('app.ai_disconnected');
+  const aiDotClass = isAiConnected ? 'bg-emerald-500' : 'bg-rose-500';
 
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <header className="fixed top-0 left-0 right-0 bg-white border-b border-border-primary h-16 z-50 shadow-sm">
-        <div className="flex items-center justify-between h-full px-6">
-          <div className="flex items-center space-x-4">
-            <button
-              type="button"
-              className="md:hidden p-2 text-text-secondary hover:text-primary transition-colors"
+    <div className='min-h-screen bg-slate-50 text-slate-900 font-sans'>
+      <header className='fixed top-0 left-0 right-0 bg-white border-b border-slate-200 h-16 z-50 shadow-sm'>
+        <div className='flex items-center justify-between h-full px-4 lg:px-6'>
+          <div className='flex items-center space-x-4'>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='md:hidden text-slate-500'
               onClick={() => setIsSidebarOpenOnMobile((v) => !v)}
-              aria-label="切换侧边栏"
+              aria-label='Toggle Sidebar'
             >
-              <i className="fas fa-bars text-lg"></i>
-            </button>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <i className="fas fa-microchip text-white text-lg"></i>
+              <Menu className='h-5 w-5' />
+            </Button>
+            <button
+              type='button'
+              className='flex items-center space-x-3 cursor-pointer'
+              onClick={() => navigate('/dashboard')}
+              aria-label={t('app.go_dashboard')}
+            >
+              <div className='w-8 h-8 bg-indigo-600 rounded-md flex items-center justify-center'>
+                <CircuitBoard className='text-white h-5 w-5' />
               </div>
-              <h1 className="text-xl font-bold text-text-primary">PCBTool.AI</h1>
-            </div>
+              <h1 className='text-lg font-bold text-slate-900 hidden sm:block tracking-tight'>
+                {t('app.name')}
+              </h1>
+            </button>
           </div>
 
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
+          <div className='hidden md:flex flex-1 max-w-md mx-8'>
+            <div className='relative w-full'>
               <input
-                type="text"
-                placeholder="搜索项目、元器件、案例..."
+                type='text'
+                placeholder={t(
+                  'app.search_placeholder',
+                  'Search projects, components...',
+                )}
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 onKeyDown={handleGlobalSearchKeyDown}
-                className="w-full pl-10 pr-4 py-2 border border-border-primary rounded-lg bg-bg-secondary text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
+                className='w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all'
               />
-              <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary"></i>
+              <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4' />
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <button
-              type="button"
+          <div className='flex items-center space-x-2 lg:space-x-4'>
+            <LanguageSwitcher />
+
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors'
               onClick={() => navigate('/user-profile')}
-              className="flex items-center space-x-2 px-2 py-1 rounded-full hover:bg-bg-secondary transition-colors"
-              aria-label={aiStatusText}
+              title={aiStatusText}
+              aria-label={t('app.ai_status')}
             >
-              <span className={`w-3 h-3 rounded-full animate-pulse ${aiDotClass}`}></span>
-              <span className="text-xs text-text-secondary">
-                {isAiConfigured ? aiConfig?.model : '未设置模型'}
+              <span
+                className={`w-2 h-2 rounded-full animate-pulse ${aiDotClass}`}
+              ></span>
+              <span className='text-xs text-slate-500 font-medium'>
+                {isAiConfigured ? aiConfig?.model : t('app.no_model')}
               </span>
-            </button>
-            <button
-              type="button"
-              className="relative p-2 text-text-secondary hover:text-primary transition-colors"
-              aria-label="通知"
+            </Button>
+
+            <Button
+              variant='ghost'
+              size='icon'
+              className='text-slate-500 relative'
             >
-              <i className="fas fa-bell text-lg"></i>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-danger rounded-full"></span>
-            </button>
+              <Bell className='h-5 w-5' />
+              <span className='absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border border-white'></span>
+            </Button>
+
             <button
-              type="button"
-              onClick={handleAvatarClick}
-              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-bg-secondary transition-colors"
-              aria-label="用户设置"
+              type='button'
+              className='flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity'
+              onClick={() => navigate('/user-profile')}
+              aria-label={t('app.profile')}
             >
               <img
-                src="https://s.coze.cn/image/ZIbLDVaKweA/"
-                alt="用户头像"
-                className="w-8 h-8 rounded-full"
+                src='https://s.coze.cn/image/ZIbLDVaKweA/'
+                alt='User Avatar'
+                className='w-8 h-8 rounded-full border border-slate-200'
               />
-              <span className="hidden sm:inline text-text-primary font-medium">张工程师</span>
-              <i className="fas fa-chevron-down text-text-secondary text-sm"></i>
+              <span className='hidden lg:inline text-sm font-medium text-slate-700'>
+                {t('app.engineer')}
+              </span>
+              <ChevronDown className='hidden lg:block h-4 w-4 text-slate-400' />
             </button>
           </div>
         </div>
       </header>
 
       <aside
-        className={[
-          'fixed left-0 top-16 bottom-0 w-64 bg-gradient-sidebar text-sidebar-text z-40 transition-transform duration-300 ease-in-out',
+        className={cn(
+          'fixed left-0 top-16 bottom-0 w-64 bg-slate-900 text-slate-300 z-40 transition-transform duration-300 ease-in-out border-r border-slate-800',
           'md:translate-x-0',
-          isSidebarOpenOnMobile ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-        ].join(' ')}
+          isSidebarOpenOnMobile ? 'translate-x-0' : '-translate-x-full',
+        )}
       >
-        <nav className="p-4 space-y-2">
+        <nav className='p-4 space-y-1'>
           {NAV_ITEMS.map((item) => {
             const active = isActivePath(location.pathname, item.to);
+            const label = item.labelKey.startsWith('app.')
+              ? t(item.labelKey)
+              : item.labelKey;
+
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 onClick={() => setIsSidebarOpenOnMobile(false)}
-                className={[
-                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
-                  active ? 'bg-sidebar-hover text-sidebar-text-active' : 'hover:bg-sidebar-hover',
-                ].join(' ')}
+                className={cn(
+                  'flex items-center space-x-3 px-3 py-2 rounded-md transition-all duration-200 group',
+                  active
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'hover:bg-slate-800 hover:text-white',
+                )}
               >
-                <i className={`${item.iconClass} text-lg`}></i>
-                <span className="font-medium">{item.label}</span>
+                <item.icon
+                  className={cn(
+                    'h-5 w-5',
+                    active
+                      ? 'text-white'
+                      : 'text-slate-400 group-hover:text-white',
+                  )}
+                />
+                <span className='font-medium text-sm'>{label}</span>
               </Link>
             );
           })}
         </nav>
+
+        <div className='absolute bottom-4 left-4 right-4'>
+          <div className='p-4 bg-slate-800 rounded-lg border border-slate-700'>
+            <h4 className='text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2'>
+              {t('app.system_status')}
+            </h4>
+            <div className='flex items-center justify-between text-xs text-slate-300 mb-1'>
+              <span>{t('app.server')}</span>
+              <span className='text-emerald-400'>{t('app.online')}</span>
+            </div>
+            <div className='flex items-center justify-between text-xs text-slate-300'>
+              <span>{t('app.version')}</span>
+              <span>v0.9.1-beta</span>
+            </div>
+          </div>
+        </div>
       </aside>
 
-      <main className="pt-16 md:ml-64 p-6 min-h-screen">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-text-primary mb-2">{pageTitle}</h2>
-          <nav className="text-sm text-text-secondary">
-            {breadcrumbItems.map((item, index) => (
-              <span key={`${item}-${index}`}>
-                {index > 0 && <i className="fas fa-chevron-right mx-2"></i>}
-                <span className={index === breadcrumbItems.length - 1 ? 'text-primary' : undefined}>
-                  {item}
-                </span>
-              </span>
-            ))}
-          </nav>
-        </div>
+      {isSidebarOpenOnMobile && (
+        <div
+          className='fixed inset-0 bg-slate-900/50 z-30 md:hidden backdrop-blur-sm'
+          onClick={() => setIsSidebarOpenOnMobile(false)}
+        />
+      )}
 
-        {children}
+      <main className='pt-16 md:ml-64 min-h-screen transition-all duration-300'>
+        <div className='p-4 md:p-6 lg:p-8 max-w-7xl mx-auto'>
+          <div className='mb-6'>
+            <Breadcrumb>
+              <BreadcrumbList>
+                {breadcrumbItems.map((item, index) => {
+                  const isLast = index === breadcrumbItems.length - 1;
+                  // Assuming the first item is usually Dashboard or Home which we can link to
+                  // For now, we only link if we have a way to know the path, but the current breadcrumb implementation
+                  // passes only strings. To support links, we might need to change the API of AppShell or infer links.
+                  // For this implementation, we will keep it as text for consistency with previous behavior, 
+                  // but wrap in the new component structure. 
+                  // If "Dashboard" or "工作台" is the first item, we can link it to /dashboard.
+                  const isDashboard = item === t('app.dashboard') || item === 'Dashboard' || item === '工作台';
+                  
+                  return (
+                    <React.Fragment key={index}>
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage>{item}</BreadcrumbPage>
+                        ) : isDashboard ? (
+                          <BreadcrumbLink to='/dashboard'>{item}</BreadcrumbLink>
+                        ) : (
+                          <span className='text-slate-500 hover:text-slate-700 transition-colors cursor-default'>
+                            {item}
+                          </span>
+                        )}
+                      </BreadcrumbItem>
+                      {!isLast && <BreadcrumbSeparator />}
+                    </React.Fragment>
+                  );
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+
+          <div className='flex items-center justify-between mb-8'>
+            <h2 className='text-2xl font-bold text-slate-900 tracking-tight'>
+              {displayPageTitle}
+            </h2>
+          </div>
+
+          <div className='animate-in fade-in slide-in-from-bottom-4 duration-500'>
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );

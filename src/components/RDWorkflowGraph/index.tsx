@@ -12,14 +12,6 @@ const RDWorkflowGraph: React.FC<RDWorkflowGraphProps> = ({ data, className }) =>
     return data.nodes.filter(node => node.laneId === laneId);
   };
 
-  // 获取节点的输出节点
-  const getNodeOutputs = (nodeId: string) => {
-    return data.edges
-      .filter(edge => edge.fromNodeId === nodeId)
-      .map(edge => data.nodes.find(n => n.id === edge.toNodeId))
-      .filter(n => n !== undefined);
-  };
-
   return (
     <div className={`w-full h-full bg-white overflow-auto p-6 ${className || ''}`}>
       {/* 门禁展示 */}
@@ -79,8 +71,6 @@ const RDWorkflowGraph: React.FC<RDWorkflowGraphProps> = ({ data, className }) =>
                         <div className="text-gray-400 text-sm italic">无任务</div>
                       ) : (
                         laneNodes.map((node, nodeIdx) => {
-                          const outputs = getNodeOutputs(node.id);
-
                           return (
                             <div key={node.id} className="flex items-center gap-2">
                               {/* 节点卡片 */}
